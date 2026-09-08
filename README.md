@@ -186,7 +186,11 @@ supabase/          SQL migrations
   upload in overlapping batches, the colour-managed worker, filters, the
   profile warning, and a 30-day trash.
   `cd worker && npm run verify-pipeline` proves the colour maths.
-- Phase 3 — composer: captions, hashtags, carousel, tagging
+- **Phase 3 — composer: mostly done.** Caption with a live counter that knows
+  whether hashtags land in the caption or the first comment, photo picker with
+  the 10-image carousel cap and reordering, the hashtag library, and the
+  shuffle that replaced the spreadsheet. Still to do: tagging other accounts
+  on a photo.
 - Phase 4 — scheduling: slots, rolling queue, fixed posts
 - Phase 5 — grid preview, ideas, notepad
 - Phase 6 — publishing worker, token refresh, Meta connection

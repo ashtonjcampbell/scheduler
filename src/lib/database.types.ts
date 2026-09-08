@@ -112,8 +112,12 @@ export type HashtagRecipeItem = {
 };
 
 export type PostHashtag = {
+  id: string;
   post_id: string;
-  hashtag_id: string;
+  /** The literal tag that will be published, without the leading #. */
+  tag: string;
+  /** The library entry it came from, or null for a one-off. */
+  hashtag_id: string | null;
   position: number;
 };
 
@@ -216,7 +220,7 @@ export type Database = {
       hashtags: Table<Hashtag, Generated | "active">;
       hashtag_recipes: Table<HashtagRecipe, Generated>;
       hashtag_recipe_items: Table<HashtagRecipeItem, never>;
-      post_hashtags: Table<PostHashtag, "position">;
+      post_hashtags: Table<PostHashtag, "id" | "position">;
       schedule_slots: Table<ScheduleSlot, Generated | "active">;
       notes: Table<Note, Generated | "title" | "content" | "content_html">;
       publish_log: Table<PublishLogEntry, "id" | "at" | "level">;
