@@ -105,7 +105,14 @@ The other two are read at run time and are set as Worker secrets:
 ```bash
 npx wrangler secret put ALLOWED_EMAIL
 npx wrangler secret put APP_URL
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
+
+The service-role key is needed by the app as well as the worker. `app_secrets`
+has no read policy — that is what keeps Instagram tokens out of the browser —
+so the OAuth routes and the settings page reach it through
+`src/lib/supabase/admin.ts`. That module imports `server-only`, so importing it
+from a client component fails the build rather than leaking at runtime.
 
 Two more are optional. They let an upload start processing immediately rather
 than waiting for the next 20-minute sweep — set `GITHUB_REPO` (as
