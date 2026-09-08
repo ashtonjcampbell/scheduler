@@ -1,0 +1,38 @@
+name: Refresh Instagram token
+
+on:
+  schedule:
+    # Instagram long-lived tokens last 60 days. Refreshing weekly means six
+    # consecutive failures would have to go unnoticed before posting breaks,
+    # and each failure emails you.
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-token
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Refresh
+        working-directory: worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run refresh-token

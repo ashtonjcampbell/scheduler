@@ -1,0 +1,28 @@
+{
+  "name": "ig-scheduler-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Background jobs run by GitHub Actions: colour-managed photo processing and publishing to Instagram.",
+  "scripts": {
+    "process-media": "tsx src/process-media.ts",
+    "publish": "tsx src/publish.ts",
+    "refresh-token": "tsx src/refresh-token.ts",
+    "typecheck": "tsc --noEmit",
+    "verify-pipeline": "tsx src/verify-pipeline.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
+    "sharp": "^0.34.5",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  },
+  "allowScripts": {
+    "sharp": true,
+    "esbuild": true
+  }
+}

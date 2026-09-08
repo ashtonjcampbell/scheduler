@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ig-scheduler",
+  "main": ".open-next/worker.js",
+
+  // Pin the runtime so a future Workers release cannot change behaviour
+  // underneath a deploy. Bump deliberately, never automatically.
+  "compatibility_date": "2025-08-01",
+  // Next.js and the Supabase client both need Node built-ins.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  /*
+   * Nothing sensitive lives in this file — the repo is public.
+   *
+   * Two of the four settings are needed at BUILD time, because Next.js bakes
+   * `NEXT_PUBLIC_*` values into the JavaScript it ships to the browser. Set
+   * these as build environment variables in the Cloudflare dashboard (and in
+   * .env.local for local work):
+   *
+   *   NEXT_PUBLIC_SUPABASE_URL
+   *   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   *
+   * The other two are read at run time and are set as Worker secrets:
+   *
+   *   npx wrangler secret put ALLOWED_EMAIL
+   *   npx wrangler secret put APP_URL
+   */
+  "vars": {}
+}

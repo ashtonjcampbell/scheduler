@@ -1,0 +1,42 @@
+name: Publish due posts
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub runs scheduled workflows on a best-effort basis
+    # and can delay them under load, which is exactly why the rolling queue
+    # rolls a missed slot forward instead of publishing it late and backdated.
+    - cron: "*/15 * * * *"
+  # Lets you force a run from the Actions tab without waiting for the cron.
+  workflow_dispatch:
+
+# Never let two publish runs overlap: both could claim the same post and
+# publish it twice. Queue them instead of cancelling, so no run is lost.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # A stuck Instagram API call should not burn a full six hours.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Publish
+        working-directory: worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run publish

@@ -1,0 +1,66 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      # Some errors only surface at build time — notably the rule that a
+      # "use server" module may export nothing but async functions, which
+      # typecheck and lint both pass over. Placeholder values are fine: the
+      # build never contacts Supabase.
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          ALLOWED_EMAIL: build@example.com
+          APP_URL: https://example.com
+        run: npm run build
+
+  worker:
+    name: Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install
+        working-directory: worker
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: worker
+        run: npm run typecheck
+
+      # Proves the colour conversion is still a real gamut transform rather
+      # than a profile relabel. This is the thing the app exists for.
+      - name: Verify the colour pipeline
+        working-directory: worker
+        run: npm run verify-pipeline

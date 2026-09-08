@@ -1,0 +1,44 @@
+name: Process uploaded photos
+
+on:
+  # The app fires this straight after an upload, so processing starts within
+  # seconds rather than waiting for the next scheduled sweep.
+  repository_dispatch:
+    types: [process-media]
+  workflow_dispatch:
+  schedule:
+    # Safety net: catches anything whose dispatch was dropped, and retries
+    # photos that failed transiently.
+    - cron: "*/20 * * * *"
+
+# One processing run at a time. Each run drains everything pending, so a
+# second concurrent run would only fight over the same rows.
+concurrency:
+  group: process-media
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: worker
+        # Sharp ships prebuilt Linux binaries, so this needs no compiler.
+        run: npm ci
+
+      - name: Process pending photos
+        working-directory: worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run process-media
