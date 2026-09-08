@@ -1,10 +1,4 @@
-
-
-The service-role key is needed by the app as well as the worker: 
-has no read policy, which is what keeps Instagram tokens out of the browser,
-so the OAuth routes and the settings page reach it through
-. That module imports , so importing
-it from a client component fails the build rather than leaking.# Instagram Post Scheduler
+# Instagram Post Scheduler
 
 A private, single-user scheduling and content-organisation tool for one
 photography business's Instagram account. Replaces Buffer/Later. Every service
