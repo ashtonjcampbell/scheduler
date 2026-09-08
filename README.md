@@ -113,6 +113,19 @@ get 2,000/month, and a 15-minute publishing cron alone costs about 2,880. No
 credentials, tokens, or photos live in this repository — they are in GitHub
 Secrets, Cloudflare secrets, and Supabase.
 
+## Why the cron also keeps the database alive
+
+Supabase pauses a free project after 7 days with no database activity. The
+publishing job queries the database every 15 minutes and the media sweep every
+20, so once this is deployed the project can never go idle long enough to be
+paused — whether or not anyone opens the app.
+
+Before deployment nothing touches the database between sessions, so it will
+pause. Unpause it from the Supabase dashboard; no data is lost and nothing
+needs re-running, though the API can take a few minutes to catch up afterwards.
+`notify pgrst, 'reload schema'` hurries that along — until it runs, every table
+reports as missing from the API while being perfectly present in the database.
+
 ## Two things to know about the scheduler
 
 **GitHub's cron is best-effort.** Scheduled runs can be delayed under load. The
