@@ -11,11 +11,19 @@ export function PhotoCard({
   photo,
   usage,
   inTrash = false,
+  selectable = false,
+  selectedIndex = -1,
+  onToggleSelect,
 }: {
   photo: Photo;
   usage: PhotoUsage;
   inTrash?: boolean;
+  selectable?: boolean;
+  /** Position in the selection, or -1. Position matters: it sets carousel order. */
+  selectedIndex?: number;
+  onToggleSelect?: () => void;
 }) {
+  const isSelected = selectedIndex >= 0;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +42,13 @@ export function PhotoCard({
 
   return (
     <figure
-      className={
+      className={[
+        "overflow-hidden rounded-lg",
         inTrash
-          ? "overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-950"
-          : "overflow-hidden rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"
-      }
+          ? "border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-950"
+          : "border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+        isSelected ? "ring-2 ring-stone-900 dark:ring-stone-100" : "",
+      ].join(" ")}
     >
       <div className="relative aspect-square bg-stone-100 dark:bg-stone-950">
         {photo.status === "ready" && thumbUrl(photo) ? (
@@ -59,16 +69,40 @@ export function PhotoCard({
           </div>
         )}
 
+        {selectable && (
+          <button
+            type="button"
+            onClick={onToggleSelect}
+            aria-pressed={isSelected}
+            aria-label={isSelected ? `Deselect ${photo.original_filename}` : `Select ${photo.original_filename}`}
+            className="absolute inset-0 cursor-pointer"
+          >
+            <span
+              className={
+                isSelected
+                  ? "absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-xs font-semibold text-white dark:bg-stone-100 dark:text-stone-900"
+                  : "absolute left-2 top-2 h-6 w-6 rounded-full border-2 border-white/80 bg-stone-900/30 backdrop-blur"
+              }
+            >
+              {isSelected ? selectedIndex + 1 : ""}
+            </span>
+          </button>
+        )}
+
         {photo.missing_color_profile && (
           <span
             title="This photo arrived with no colour profile, so its colours were assumed rather than converted. Check it before scheduling."
-            className="absolute left-2 top-2 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950"
+            className={
+              selectable
+                ? "pointer-events-none absolute bottom-2 left-2 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950"
+                : "absolute left-2 top-2 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950"
+            }
           >
             No colour profile
           </span>
         )}
 
-        <span className="absolute right-2 top-2 rounded bg-stone-900/75 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+        <span className="pointer-events-none absolute right-2 top-2 rounded bg-stone-900/75 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
           {inTrash && photo.deleted_at
             ? `Deleted ${formatPacific(photo.deleted_at)}`
             : USAGE_LABELS[usage]}

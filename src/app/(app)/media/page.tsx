@@ -8,7 +8,7 @@ import {
 } from "@/lib/photos";
 import type { PhotoUsage } from "@/lib/database.types";
 import { UploadZone } from "./upload-zone";
-import { PhotoCard } from "./photo-card";
+import { MediaGrid } from "./media-grid";
 import { AutoRefresh } from "./auto-refresh";
 import { TrashHeader } from "./trash-header";
 
@@ -124,16 +124,7 @@ export default async function MediaPage({
               : "Nothing matches this filter."}
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {visible.map((photo) => (
-            <PhotoCard
-              key={photo.id}
-              photo={photo}
-              usage={usageById.get(photo.id) ?? "unused"}
-              inTrash={inTrash}
-            />
-          ))}
-        </div>
+        <MediaGrid photos={visible} usageById={usageById} inTrash={inTrash} />
       )}
     </div>
   );

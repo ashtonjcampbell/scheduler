@@ -42,6 +42,16 @@ export type Photo = {
   thumb_path: string | null;
   /** Set when the full-size file was removed after the post went live. */
   full_removed_at: string | null;
+  /** Set when the original was deleted. Null while a lossless re-crop is possible. */
+  original_removed_at: string | null;
+  crop_x: number | null;
+  crop_y: number | null;
+  crop_w: number | null;
+  crop_h: number | null;
+  crop_aspect: string | null;
+  /** What the file really was, when its profile had to be guessed. */
+  assumed_profile: string | null;
+  reprocess_requested_at: string | null;
 };
 
 export type Post = {
@@ -163,6 +173,8 @@ export type AppSettings = {
   hashtag_max: number;
   /** Days after publishing before the full-size file is dropped. 0 = never. */
   archive_published_after_days: number;
+  /** Days an original is kept so crops stay lossless. 0 = keep forever. */
+  keep_originals_days: number;
   updated_at: string;
 };
 

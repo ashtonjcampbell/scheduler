@@ -41,6 +41,7 @@ async function main() {
 
   await releaseStaleClaims();
   await purgeOldTrash();
+  await purgeExpiredOriginals();
   await archivePublishedPhotos();
 
   const startedAt = Date.now();
@@ -189,9 +190,9 @@ async function processOne(
         status: "ready",
         storage_path: storagePath,
         thumb_path: thumbPath,
-        // The original has served its purpose; clearing the path first means
-        // a failed delete below cannot leave a dangling reference.
-        upload_path: null,
+        // The original is deliberately KEPT for a while: a lossless re-crop,
+        // or re-reading a file whose profile had to be guessed, both need it.
+        // purgeExpiredOriginals() clears it once the window passes.
         width: result.width,
         height: result.height,
         bytes: result.bytes,
@@ -207,19 +208,6 @@ async function processOne(
       throw new Error(`Could not record the result: ${updateError.message}`);
     }
 
-    // Free the storage the original was using. A failure here wastes space
-    // but does not invalidate the work, so it must not fail the photo.
-    const { error: removeError } = await supabase.storage
-      .from("uploads")
-      .remove([uploadPath]);
-
-    if (removeError) {
-      await log("warn", "Processed file stored, but the original could not be deleted", {
-        id,
-        uploadPath,
-        error: removeError.message,
-      });
-    }
 
     console.log(
       `  ${filename} → ${result.width}×${result.height}, ` +
@@ -426,6 +414,72 @@ async function archivePublishedPhotos() {
       `Archived ${archived} published photo(s), freeing ${(freed / 1024 / 1024).toFixed(1)}MB`,
       { days },
     );
+  }
+}
+
+/**
+ * Delete originals that have outlived their usefulness.
+ *
+ * The original is kept for a short window after conversion so a crop or a
+ * corrected colour profile can be applied losslessly. Past that window it is
+ * pure cost: the delivered file already exists, and only recent uploads are
+ * ever revisited in practice.
+ */
+async function purgeExpiredOriginals() {
+  const supabase = serviceClient();
+
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("keep_originals_days")
+    .single();
+
+  const days = settings?.keep_originals_days ?? 7;
+  if (days <= 0) return; // Keeping originals indefinitely.
+
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: expired, error } = await supabase
+    .from("photos")
+    .select("id, original_filename, upload_path")
+    .eq("status", "ready")
+    .not("upload_path", "is", null)
+    .is("original_removed_at", null)
+    .lt("processed_at", cutoff);
+
+  if (error) {
+    await log("warn", "Could not check for expired originals", { error: error.message });
+    return;
+  }
+
+  if (!expired || expired.length === 0) return;
+
+  let removed = 0;
+
+  for (const photo of expired) {
+    const { error: removeError } = await supabase.storage
+      .from("uploads")
+      .remove([photo.upload_path!]);
+
+    if (removeError) {
+      await log("warn", `Could not delete the original for ${photo.original_filename}`, {
+        id: photo.id,
+        error: removeError.message,
+      });
+      continue;
+    }
+
+    // Row updated only once the file is actually gone, so a failure leaves
+    // the photo looking re-croppable rather than pointing at nothing.
+    await supabase
+      .from("photos")
+      .update({ upload_path: null, original_removed_at: new Date().toISOString() })
+      .eq("id", photo.id);
+
+    removed++;
+  }
+
+  if (removed > 0) {
+    await log("info", `Deleted ${removed} original(s) older than ${days} days`);
   }
 }
 
