@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
-import { photoUrl } from "@/lib/photos";
+import { thumbUrl } from "@/lib/photos";
 import { formatPacific } from "@/lib/time";
 import type { PostStatus } from "@/lib/database.types";
 import { NewPostButton } from "./new-post-button";
@@ -36,7 +36,7 @@ export default async function PostsPage() {
         .select("id, title, caption, status, scheduled_for, published_at, updated_at")
         .order("updated_at", { ascending: false }),
       supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, status").is("deleted_at", null),
+      supabase.from("photos").select("id, storage_path, thumb_path, status").is("deleted_at", null),
       supabase.from("post_hashtags").select("post_id"),
     ]);
 
@@ -94,10 +94,10 @@ export default async function PostsPage() {
                   className="flex h-full gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:border-stone-400 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-600"
                 >
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded bg-stone-100 dark:bg-stone-950">
-                    {cover?.storage_path && cover.status === "ready" ? (
+                    {cover && cover.status === "ready" && thumbUrl(cover) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={photoUrl(cover.storage_path)}
+                        src={thumbUrl(cover)!}
                         alt=""
                         className="h-full w-full object-cover"
                       />

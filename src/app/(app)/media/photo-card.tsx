@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { photoUrl, formatBytes, USAGE_LABELS } from "@/lib/photos";
+import { photoUrl, thumbUrl, formatBytes, USAGE_LABELS } from "@/lib/photos";
 import { formatPacific } from "@/lib/time";
 import type { Photo, PhotoUsage } from "@/lib/database.types";
 import { trashPhoto, restorePhoto, deleteForever, retryPhoto, updateAltText } from "./actions";
@@ -41,14 +41,14 @@ export function PhotoCard({
       }
     >
       <div className="relative aspect-square bg-stone-100 dark:bg-stone-950">
-        {photo.status === "ready" && photo.storage_path ? (
-          // Deliberately a plain <img>: this file is already exactly what we
-          // intend to deliver, and putting it through an optimiser would
-          // re-encode it and risk the colour shift the pipeline exists to
-          // prevent. It is also the true preview — what Instagram receives.
+        {photo.status === "ready" && thumbUrl(photo) ? (
+          // Grids show the thumbnail; the full processed file is one click
+          // away below, because that is the one whose colour matters.
+          // Deliberately a plain <img> either way: an optimiser would
+          // re-encode and risk the very colour shift this app prevents.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={photoUrl(photo.storage_path)}
+            src={thumbUrl(photo)!}
             alt={photo.alt_text ?? photo.original_filename}
             loading="lazy"
             className={inTrash ? "h-full w-full object-cover opacity-50" : "h-full w-full object-cover"}
@@ -145,6 +145,29 @@ export function PhotoCard({
                 >
                   Retry
                 </button>
+              )}
+
+              {/* The grid shows a thumbnail to save bandwidth, so the real
+                  processed file — the one Instagram receives, and the only
+                  one worth judging colour on — needs a way to be seen. */}
+              {photo.storage_path && (
+                <a
+                  href={photoUrl(photo.storage_path)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-900 hover:underline dark:text-stone-400 dark:hover:text-stone-100"
+                >
+                  Full size
+                </a>
+              )}
+
+              {photo.full_removed_at && (
+                <span
+                  title="The full-size file was removed after this post had been live a while. The thumbnail is kept, but this photo cannot be posted again."
+                  className="text-[11px] text-stone-400 dark:text-stone-500"
+                >
+                  Archived
+                </span>
               )}
 
               {/* No confirmation dialog: this is reversible, and the trash is

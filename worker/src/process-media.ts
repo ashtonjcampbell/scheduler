@@ -41,6 +41,7 @@ async function main() {
 
   await releaseStaleClaims();
   await purgeOldTrash();
+  await archivePublishedPhotos();
 
   const startedAt = Date.now();
   let succeeded = 0;
@@ -154,6 +155,7 @@ async function processOne(
     const result = await processForInstagram(input);
 
     const storagePath = `${id}.jpg`;
+    const thumbPath = `thumbs/${id}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("media")
@@ -169,11 +171,24 @@ async function processOne(
       throw new Error(`Could not store the processed file: ${uploadError.message}`);
     }
 
+    const { error: thumbError } = await supabase.storage
+      .from("media")
+      .upload(thumbPath, result.thumb, {
+        contentType: "image/jpeg",
+        cacheControl: "31536000",
+        upsert: true,
+      });
+
+    if (thumbError) {
+      throw new Error(`Could not store the thumbnail: ${thumbError.message}`);
+    }
+
     const { error: updateError } = await supabase
       .from("photos")
       .update({
         status: "ready",
         storage_path: storagePath,
+        thumb_path: thumbPath,
         // The original has served its purpose; clearing the path first means
         // a failed delete below cannot leave a dangling reference.
         upload_path: null,
@@ -208,7 +223,7 @@ async function processOne(
 
     console.log(
       `  ${filename} → ${result.width}×${result.height}, ` +
-        `${(result.bytes / 1024 / 1024).toFixed(2)}MB, q${result.quality}, ` +
+        `${(result.bytes / 1024 / 1024).toFixed(2)}MB (+${Math.round(result.thumbBytes / 1024)}KB thumb), q${result.quality}, ` +
         `from ${result.sourceColorProfile ?? "no embedded profile"}`,
     );
 
@@ -294,6 +309,122 @@ async function purgeOldTrash() {
     await log(
       "info",
       `Purged ${removed} photo(s) that had been in the trash over ${TRASH_RETENTION_DAYS} days`,
+    );
+  }
+}
+
+/**
+ * Drop the full-size file for photos whose posts went live a while ago.
+ *
+ * Once a post is published, Instagram holds its own copy and the only thing
+ * this app still needs is something to draw in the grid preview — which the
+ * thumbnail covers at about 5% of the size.
+ *
+ * Two rules keep this from destroying anything useful:
+ *
+ *  - the photo must not belong to any post that is still unpublished. A photo
+ *    queued for a second post keeps its full file, or that post would go out
+ *    with nothing to send.
+ *  - the thumbnail must already exist. Photos processed before thumbnails
+ *    were added have none, and archiving those would leave a blank square.
+ */
+async function archivePublishedPhotos() {
+  const supabase = serviceClient();
+
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("archive_published_after_days")
+    .single();
+
+  const days = settings?.archive_published_after_days ?? 0;
+  if (days <= 0) return; // Archiving switched off.
+
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  // Everything still holding a full file that has a thumbnail to fall back on.
+  const { data: candidates, error } = await supabase
+    .from("photos")
+    .select("id, original_filename, storage_path")
+    .not("storage_path", "is", null)
+    .not("thumb_path", "is", null)
+    .is("full_removed_at", null);
+
+  if (error) {
+    await log("warn", "Could not check for archivable photos", { error: error.message });
+    return;
+  }
+
+  if (!candidates || candidates.length === 0) return;
+
+  // Both sides fetched separately and paired here: an embedded select needs
+  // relationship metadata the hand-written types do not carry.
+  const { data: allLinks } = await supabase.from("post_photos").select("photo_id, post_id");
+  const { data: posts } = await supabase.from("posts").select("id, status, published_at");
+
+  const postById = new Map((posts ?? []).map((p) => [p.id, p]));
+
+  const usage = new Map<string, { unpublished: boolean; lastPublished: string | null }>();
+  for (const link of allLinks ?? []) {
+    const post = postById.get(link.post_id);
+    if (!post) continue;
+
+    const entry = usage.get(link.photo_id) ?? { unpublished: false, lastPublished: null };
+
+    if (post.status === "published") {
+      if (post.published_at && (!entry.lastPublished || post.published_at > entry.lastPublished)) {
+        entry.lastPublished = post.published_at;
+      }
+    } else {
+      entry.unpublished = true;
+    }
+
+    usage.set(link.photo_id, entry);
+  }
+
+  let archived = 0;
+  let freed = 0;
+
+  for (const photo of candidates) {
+    const entry = usage.get(photo.id);
+
+    // Never used, or still wanted by a post that has not gone out yet.
+    if (!entry || entry.unpublished || !entry.lastPublished) continue;
+    if (entry.lastPublished > cutoff) continue;
+
+    const { data: sizes } = await supabase
+      .from("photos")
+      .select("bytes")
+      .eq("id", photo.id)
+      .single();
+
+    const { error: removeError } = await supabase.storage
+      .from("media")
+      .remove([photo.storage_path!]);
+
+    if (removeError) {
+      await log("warn", `Could not archive ${photo.original_filename}`, {
+        id: photo.id,
+        error: removeError.message,
+      });
+      continue;
+    }
+
+    // Row updated only after the file is actually gone, so a failure here
+    // leaves the photo looking normal rather than pointing at nothing.
+    await supabase
+      .from("photos")
+      .update({ storage_path: null, full_removed_at: new Date().toISOString() })
+      .eq("id", photo.id);
+
+    archived++;
+    freed += sizes?.bytes ?? 0;
+  }
+
+  if (archived > 0) {
+    await log(
+      "info",
+      `Archived ${archived} published photo(s), freeing ${(freed / 1024 / 1024).toFixed(1)}MB`,
+      { days },
     );
   }
 }

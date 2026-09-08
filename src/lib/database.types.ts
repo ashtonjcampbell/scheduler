@@ -38,6 +38,10 @@ export type Photo = {
   alt_text: string | null;
   notes: string | null;
   deleted_at: string | null;
+  /** Small colour-managed version for grids and pickers. */
+  thumb_path: string | null;
+  /** Set when the full-size file was removed after the post went live. */
+  full_removed_at: string | null;
 };
 
 export type Post = {
@@ -157,6 +161,8 @@ export type AppSettings = {
   ig_connected_at: string | null;
   hashtag_min: number;
   hashtag_max: number;
+  /** Days after publishing before the full-size file is dropped. 0 = never. */
+  archive_published_after_days: number;
   updated_at: string;
 };
 

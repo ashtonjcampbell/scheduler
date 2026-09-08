@@ -78,6 +78,13 @@ actual Worker build:
 npm run cf:preview
 ```
 
+**Stop `npm run dev` first.** `initOpenNextCloudflareForDev()` in
+`next.config.ts` starts a `workerd` process to supply Cloudflare bindings
+during development, and it holds a handle on `.open-next/`. With the dev server
+running, a Cloudflare build fails with a bare `EPERM ... .open-next`, which
+gives no hint that the dev server is the cause. Killing `workerd` alone does
+not help — the dev server immediately spawns another.
+
 ## Deploying
 
 Two of the four settings are needed at **build** time, because Next.js bakes

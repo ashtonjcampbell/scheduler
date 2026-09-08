@@ -37,6 +37,25 @@ export function photoUrl(storagePath: string): string {
   return `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${storagePath}`;
 }
 
+/**
+ * Best URL for showing a photo in a grid or picker.
+ *
+ * Prefers the thumbnail: a 1440px file in a 200px cell is roughly 20x more
+ * bandwidth than the grid needs. Falls back to the full file for photos
+ * processed before thumbnails existed.
+ *
+ * Deliberately NOT used where colour is being judged — the composer preview
+ * and the detail view show the real processed file, because that is the one
+ * Instagram receives.
+ */
+export function thumbUrl(photo: {
+  thumb_path: string | null;
+  storage_path: string | null;
+}): string | null {
+  const path = photo.thumb_path ?? photo.storage_path;
+  return path ? photoUrl(path) : null;
+}
+
 /** Storage path for a freshly uploaded original. */
 export function uploadPathFor(photoId: string, filename: string): string {
   return `${photoId}.${extensionOf(filename)}`;

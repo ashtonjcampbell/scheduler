@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Photo, PhotoUsage } from "@/lib/database.types";
-import { photoUrl, USAGE_LABELS } from "@/lib/photos";
+import { thumbUrl, USAGE_LABELS } from "@/lib/photos";
 
 /** Instagram's Content Publishing API cap, even though the app allows 20. */
 const MAX_CAROUSEL = 10;
@@ -78,13 +78,13 @@ export function PhotoPicker({
               key={photo.id}
               className="relative w-24 overflow-hidden rounded border border-stone-200 dark:border-stone-700"
             >
-              {photo.storage_path && (
+              {thumbUrl(photo) && (
                 // Plain <img> on purpose: this file is already exactly what
                 // Instagram will receive, and re-encoding it risks the colour
                 // shift the whole pipeline exists to prevent.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={photoUrl(photo.storage_path)}
+                  src={thumbUrl(photo)!}
                   alt={photo.alt_text ?? photo.original_filename}
                   className="aspect-square w-full object-cover"
                 />
@@ -170,10 +170,10 @@ export function PhotoPicker({
                     title={photo.original_filename}
                     className="relative block w-full overflow-hidden rounded border border-stone-200 transition hover:border-stone-500 disabled:opacity-40 dark:border-stone-700"
                   >
-                    {photo.storage_path && (
+                    {thumbUrl(photo) && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={photoUrl(photo.storage_path)}
+                        src={thumbUrl(photo)!}
                         alt={photo.alt_text ?? photo.original_filename}
                         loading="lazy"
                         className="aspect-square w-full object-cover"

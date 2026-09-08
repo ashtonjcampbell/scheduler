@@ -26,12 +26,28 @@ const TARGET_MAX_BYTES = 6 * 1024 * 1024;
 /** Quality ladder, tried in order, until the file fits the size budget. */
 const QUALITY_STEPS = [95, 92, 88, 84, 80] as const;
 
+/**
+ * Width of the grid thumbnail.
+ *
+ * The media bank draws photos at roughly 200px in a grid; 400px covers a
+ * retina screen at that size and is about 20x smaller than the full file.
+ */
+const THUMB_WIDTH = 400;
+
 export interface ProcessedImage {
   data: Buffer;
   width: number;
   height: number;
   bytes: number;
   quality: number;
+  /**
+   * Small version for grids and pickers. Produced by the SAME colour-managed
+   * conversion as the full file, so it is a faithful miniature — not a
+   * browser-scaled guess. Anywhere colour is actually being judged still
+   * shows the full file.
+   */
+  thumb: Buffer;
+  thumbBytes: number;
   /** Human-readable name of the profile the ORIGINAL carried, if any. */
   sourceColorProfile: string | null;
   /**
@@ -82,6 +98,7 @@ export async function processForInstagram(input: Buffer): Promise<ProcessedImage
         height: info.height,
         bytes: info.size,
         quality,
+        ...(await makeThumbnail(input)),
         sourceColorProfile,
         missingColorProfile,
       };
@@ -90,6 +107,25 @@ export async function processForInstagram(input: Buffer): Promise<ProcessedImage
 
   // Unreachable: the loop always returns on its final step.
   throw new Error("Image processing failed to produce an output");
+}
+
+/**
+ * The grid thumbnail.
+ *
+ * Made from the ORIGINAL, not from the finished JPEG. Downscaling an
+ * already-compressed file bakes its artefacts into the smaller one; going back
+ * to the source costs one extra decode and gives a visibly cleaner thumbnail.
+ * It runs the same ICC conversion, so the colours match what the full file
+ * shows rather than drifting.
+ */
+async function makeThumbnail(input: Buffer): Promise<{ thumb: Buffer; thumbBytes: number }> {
+  const thumb = await sharp(input, { ignoreIcc: false, autoOrient: true })
+    .resize({ width: THUMB_WIDTH, withoutEnlargement: true, fit: "inside" })
+    .withIccProfile("srgb")
+    .jpeg({ quality: 78, mozjpeg: true })
+    .toBuffer();
+
+  return { thumb, thumbBytes: thumb.length };
 }
 
 /**
