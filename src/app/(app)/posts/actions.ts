@@ -222,3 +222,69 @@ export async function saveTagToLibrary(
   revalidatePath("/hashtags");
   return { id: data.id };
 }
+
+// ---------------------------------------------------------------------------
+// Tagging accounts on a photo
+// ---------------------------------------------------------------------------
+
+/** Instagram's ceiling per image. */
+const MAX_TAGS_PER_IMAGE = 20;
+
+/**
+ * Replace the tags on one image of a post.
+ *
+ * Keyed on (post_id, photo_id) rather than the join row, so saving the post's
+ * photos — which replaces those rows wholesale to keep positions honest — no
+ * longer takes the tags with it.
+ */
+export async function setPhotoTags(
+  postId: string,
+  photoId: string,
+  tags: Array<{ username: string; x: number; y: number }>,
+): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  const seen = new Set<string>();
+  const cleaned: Array<{ username: string; x: number; y: number }> = [];
+
+  for (const tag of tags) {
+    const username = tag.username.trim().replace(/^@+/, "");
+
+    if (!/^[A-Za-z0-9._]{1,30}$/.test(username)) {
+      return { error: `"${tag.username}" is not a valid Instagram username.` };
+    }
+
+    const key = username.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (tag.x < 0 || tag.x > 1 || tag.y < 0 || tag.y > 1) {
+      return { error: "A tag was placed outside the image." };
+    }
+
+    cleaned.push({ username, x: tag.x, y: tag.y });
+  }
+
+  if (cleaned.length > MAX_TAGS_PER_IMAGE) {
+    return { error: `Instagram allows at most ${MAX_TAGS_PER_IMAGE} tags on an image.` };
+  }
+
+  const { error: clearError } = await supabase
+    .from("photo_tags")
+    .delete()
+    .eq("post_id", postId)
+    .eq("photo_id", photoId);
+
+  if (clearError) return { error: clearError.message };
+
+  if (cleaned.length > 0) {
+    const { error } = await supabase.from("photo_tags").insert(
+      cleaned.map((tag) => ({ post_id: postId, photo_id: photoId, ...tag })),
+    );
+
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/posts/${postId}`);
+  return {};
+}

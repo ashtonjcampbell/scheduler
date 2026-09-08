@@ -9,6 +9,7 @@ import type {
   Photo,
   PhotoUsage,
   Post,
+  PhotoTag,
 } from "@/lib/database.types";
 import { planCaption, allHashtags, inlineHashtags, CAPTION_LIMIT } from "@/lib/caption";
 import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
@@ -16,10 +17,12 @@ import { updatePost, setPostPhotos, setPostHashtags } from "../actions";
 import { PhotoPicker } from "./photo-picker";
 import { HashtagPanel, type PickedTag } from "./hashtag-panel";
 import { SchedulePanel } from "./schedule-panel";
+import { TagEditor } from "./tag-editor";
 
 type LoadedPost = Post & {
   post_photos: Array<{ id: string; photo_id: string; position: number }>;
   post_hashtags: Array<{ id: string; tag: string; hashtag_id: string | null; position: number }>;
+  photo_tags: PhotoTag[];
 };
 
 /** Long enough not to fire mid-sentence, short enough to feel automatic. */
@@ -57,6 +60,7 @@ export function Composer({
       .map((t) => ({ tag: t.tag, hashtagId: t.hashtag_id })),
   );
 
+  const [tagging, setTagging] = useState<Photo | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +133,14 @@ export function Composer({
     [usage],
   );
 
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tag of post.photo_tags) {
+      counts.set(tag.photo_id, (counts.get(tag.photo_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [post.photo_tags]);
+
   const tooManyTags = effectiveTags.length > MAX_HASHTAGS_PER_POST;
   const outsideGuide =
     effectiveTags.length > 0 &&
@@ -159,6 +171,8 @@ export function Composer({
             usageById={usageById}
             selected={photoIds}
             onChange={setPhotoIds}
+            tagCounts={tagCounts}
+            onTag={setTagging}
           />
 
           <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
@@ -260,6 +274,14 @@ export function Composer({
           )}
         </div>
       </div>
+      {tagging && (
+        <TagEditor
+          photo={tagging}
+          postId={post.id}
+          tags={post.photo_tags.filter((t) => t.photo_id === tagging.id)}
+          onClose={() => setTagging(null)}
+        />
+      )}
     </div>
   );
 }

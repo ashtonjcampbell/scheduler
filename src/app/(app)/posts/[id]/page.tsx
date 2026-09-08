@@ -16,7 +16,7 @@ export default async function ComposePage({
 
   // Separate queries rather than embedded selects — see the note in
   // ../page.tsx for why.
-  const [post, postPhotos, postTags, photos, tags, library, categories, settings] =
+  const [post, postPhotos, postTags, photoTags, photos, tags, library, categories, settings] =
     await Promise.all([
       supabase.from("posts").select("*").eq("id", id).single(),
       supabase
@@ -27,6 +27,7 @@ export default async function ComposePage({
         .from("post_hashtags")
         .select("id, tag, hashtag_id, position")
         .eq("post_id", id),
+      supabase.from("photo_tags").select("*").eq("post_id", id),
       // Only ready photos can be attached: an unprocessed one has no file
       // for Instagram to fetch, and a trashed one is on its way out.
       supabase
@@ -59,6 +60,7 @@ export default async function ComposePage({
           ...post.data,
           post_photos: postPhotos.data ?? [],
           post_hashtags: postTags.data ?? [],
+          photo_tags: photoTags.data ?? [],
         }}
         libraryPhotos={photos.data ?? []}
         usage={tags.data ?? []}

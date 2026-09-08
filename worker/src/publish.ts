@@ -287,12 +287,12 @@ async function buildPayload(
 
   const { data: userTagRows } = await supabase
     .from("photo_tags")
-    .select("post_photo_id, username, x, y")
-    .in("post_photo_id", links.map((l) => l.id));
+    .select("photo_id, username, x, y")
+    .eq("post_id", postId);
 
   const userTags = links.map((link) =>
     (userTagRows ?? [])
-      .filter((t) => t.post_photo_id === link.id)
+      .filter((t) => t.photo_id === link.photo_id)
       .map((t) => ({ username: t.username, x: Number(t.x), y: Number(t.y) })),
   );
 

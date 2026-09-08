@@ -84,8 +84,10 @@ export type PostPhoto = {
 
 export type PhotoTag = {
   id: string;
-  post_photo_id: string;
+  post_id: string;
+  photo_id: string;
   username: string;
+  /** Fractions of the image, 0-1, exactly as the Graph API wants them. */
   x: number;
   y: number;
 };
