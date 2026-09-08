@@ -198,8 +198,10 @@ supabase/          SQL migrations
   the 10-image carousel cap and reordering, the hashtag library, and the
   shuffle that replaced the spreadsheet. Still to do: tagging other accounts
   on a photo.
-- Phase 4 — scheduling: slots, rolling queue, fixed posts
-- Phase 5 — grid preview, ideas, notepad
+- **Phase 4 — scheduling: done.** Weekly slots, the rolling queue with times
+  worked out fresh on every read, and fixed-time posts the queue flows around.
+  `npm run verify:queue` covers both daylight-saving changes.
+- **Phase 5 — grid preview, ideas, notepad: done.**
 - Phase 6 — publishing worker, token refresh, Meta connection
 
 The app ships with **dry run on**. The whole thing — queue, worker, publishing
