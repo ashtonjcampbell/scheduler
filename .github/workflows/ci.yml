@@ -25,6 +25,13 @@ jobs:
 
       - run: npm run lint
 
+      # Pure logic with awkward edges — random draws, daylight saving, missed
+      # slots. Cheap to run, and the failures they catch are the kind that
+      # would otherwise surface as a post going out at the wrong hour.
+      - run: npm run verify:shuffle
+
+      - run: npm run verify:queue
+
       # Some errors only surface at build time — notably the rule that a
       # "use server" module may export nothing but async functions, which
       # typecheck and lint both pass over. Placeholder values are fine: the

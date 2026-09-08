@@ -17,8 +17,21 @@ import { serverEnv } from "@/lib/env";
 export async function requestProcessing(): Promise<{ started: boolean; message: string }> {
   const { GITHUB_REPO, GITHUB_DISPATCH_TOKEN } = serverEnv();
 
+  /*
+   * Every failure here used to return one identical message, which made a
+   * real misconfiguration indistinguishable from a rejected request — the
+   * uploads simply sat there and there was nothing to go on. Each case now
+   * says which it was, and logs enough to find it in `wrangler tail`.
+   */
   if (!GITHUB_REPO || !GITHUB_DISPATCH_TOKEN) {
-    return { started: false, message: "Queued. Processing starts within 20 minutes." };
+    console.warn(
+      `[requestProcessing] not configured: repo=${GITHUB_REPO ? "set" : "MISSING"} ` +
+        `token=${GITHUB_DISPATCH_TOKEN ? "set" : "MISSING"}`,
+    );
+    return {
+      started: false,
+      message: "Queued — instant processing isn't configured. Starts within 20 minutes.",
+    };
   }
 
   try {
@@ -31,6 +44,8 @@ export async function requestProcessing(): Promise<{ started: boolean; message: 
           Authorization: `Bearer ${GITHUB_DISPATCH_TOKEN}`,
           "X-GitHub-Api-Version": "2022-11-28",
           "Content-Type": "application/json",
+          // GitHub rejects requests without one.
+          "User-Agent": "ig-scheduler",
         },
         body: JSON.stringify({ event_type: "process-media" }),
       },
@@ -38,12 +53,22 @@ export async function requestProcessing(): Promise<{ started: boolean; message: 
 
     // GitHub answers 204 with no body on success.
     if (!response.ok) {
-      return { started: false, message: "Queued. Processing starts within 20 minutes." };
+      const detail = await response.text().catch(() => "");
+      console.error(`[requestProcessing] GitHub said ${response.status}: ${detail.slice(0, 300)}`);
+      return {
+        started: false,
+        message: `Queued — GitHub refused the trigger (${response.status}). Starts within 20 minutes.`,
+      };
     }
 
     return { started: true, message: "Processing — usually about a minute." };
-  } catch {
-    return { started: false, message: "Queued. Processing starts within 20 minutes." };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`[requestProcessing] request failed: ${reason}`);
+    return {
+      started: false,
+      message: "Queued — could not reach GitHub. Starts within 20 minutes.",
+    };
   }
 }
 
