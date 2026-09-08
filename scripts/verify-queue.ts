@@ -1,5 +1,5 @@
-import { assignQueue, findMissed, reorder, type Slot } from "../src/lib/queue.js";
-import { formatPacific, inPacific } from "../src/lib/time.js";
+import { assignQueue, findMissed, reorder, type Slot } from "../src/lib/queue";
+import { formatPacific, inPacific } from "../src/lib/time";
 
 /**
  * Proves the rolling queue behaves. Run with `npm run verify:queue`.

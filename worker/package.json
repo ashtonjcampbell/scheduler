@@ -12,7 +12,9 @@
     "verify-pipeline": "tsx src/verify-pipeline.ts"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@supabase/supabase-js": "^2.112.4",
+    "date-fns": "^4.4.0",
     "sharp": "^0.34.5",
     "zod": "^4.5.4"
   },

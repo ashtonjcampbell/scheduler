@@ -1,4 +1,4 @@
-import { upcomingSlotInstants } from "@/lib/time";
+import { upcomingSlotInstants } from "./time";
 
 /**
  * Working out when each queued post actually goes out.

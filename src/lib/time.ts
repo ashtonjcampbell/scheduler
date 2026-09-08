@@ -39,7 +39,18 @@ export function inPacific(instant: Date | string | number): TZDate {
  * which is what makes this daylight-saving-correct.
  */
 export function pacificWallClockToInstant(day: Date, localTime: string): Date {
-  const [hours, minutes, seconds] = localTime.split(":").map(Number);
+  const parts = localTime.split(":").map(Number);
+
+  // A malformed slot time must not silently become midnight — a post going
+  // out at 00:00 instead of 10:00 is the kind of thing nobody notices until
+  // it has happened.
+  const hours = parts[0];
+  if (hours === undefined || Number.isNaN(hours)) {
+    throw new Error(`Invalid slot time: "${localTime}"`);
+  }
+
+  const minutes = parts[1] ?? 0;
+  const seconds = parts[2] ?? 0;
   const local = inPacific(day);
 
   return new Date(
@@ -48,8 +59,8 @@ export function pacificWallClockToInstant(day: Date, localTime: string): Date {
       local.getMonth(),
       local.getDate(),
       hours,
-      minutes ?? 0,
-      seconds ?? 0,
+      minutes,
+      seconds,
       0,
       TIMEZONE,
     ).getTime(),
