@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { reinterpretToSrgb, type SourceProfile } from "./colour.js";
 
 /**
  * The colour-managed conversion. This is the reason the app exists, so the
@@ -69,6 +70,12 @@ export interface Crop {
 export async function processForInstagram(
   input: Buffer,
   crop?: Crop | null,
+  /**
+   * What the file REALLY is, when it arrived with no profile and the user has
+   * said so. Overrides Sharp's sRGB assumption; see lib/colour.ts for why this
+   * cannot simply be handed to Sharp.
+   */
+  assumeProfile?: SourceProfile | null,
 ): Promise<ProcessedImage> {
   const metadata = await sharp(input).metadata();
 
@@ -76,6 +83,12 @@ export async function processForInstagram(
   const missingColorProfile = !metadata.icc;
 
   const extract = crop ? toPixels(crop, metadata) : null;
+
+  // Reinterpreting means the embedded profile is deliberately ignored — the
+  // whole point is that the file was mislabelled, or unlabelled.
+  if (assumeProfile) {
+    return reinterpretAndEncode(input, extract, assumeProfile, sourceColorProfile);
+  }
 
   for (const quality of QUALITY_STEPS) {
     const pipeline = sharp(input, {
@@ -126,6 +139,68 @@ export async function processForInstagram(
 
   // Unreachable: the loop always returns on its final step.
   throw new Error("Image processing failed to produce an output");
+}
+
+/**
+ * Convert a file whose real colour space the user has told us, then encode.
+ *
+ * Resizing happens BEFORE the transform, in the file's own encoding — which
+ * is what Sharp would do anyway for an untagged file — so the per-pixel maths
+ * runs over 1440px rather than 40 megapixels.
+ */
+async function reinterpretAndEncode(
+  input: Buffer,
+  extract: sharp.Region | null,
+  profile: SourceProfile,
+  sourceColorProfile: string | null,
+): Promise<ProcessedImage> {
+  const prepared = sharp(input, { ignoreIcc: true, autoOrient: true });
+  if (extract) prepared.extract(extract);
+
+  const { data, info } = await prepared
+    .resize({ width: MAX_WIDTH, withoutEnlargement: true, fit: "inside" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const corrected = reinterpretToSrgb(data, profile, info.channels);
+
+  const encode = (quality: number) =>
+    sharp(corrected, {
+      raw: { width: info.width, height: info.height, channels: info.channels },
+    })
+      // The pixels ARE sRGB now, so this attaches the profile rather than
+      // converting again — the transform has already happened.
+      .withIccProfile("srgb")
+      .jpeg({ quality, chromaSubsampling: "4:4:4", mozjpeg: true, progressive: true })
+      .toBuffer({ resolveWithObject: true });
+
+  let result = await encode(QUALITY_STEPS[0]);
+  for (const quality of QUALITY_STEPS.slice(1)) {
+    if (result.info.size <= TARGET_MAX_BYTES) break;
+    result = await encode(quality);
+  }
+
+  const thumb = await sharp(corrected, {
+    raw: { width: info.width, height: info.height, channels: info.channels },
+  })
+    .resize({ width: THUMB_WIDTH, withoutEnlargement: true, fit: "inside" })
+    .withIccProfile("srgb")
+    .jpeg({ quality: 78, mozjpeg: true })
+    .toBuffer();
+
+  return {
+    data: result.data,
+    width: result.info.width,
+    height: result.info.height,
+    bytes: result.info.size,
+    quality: 0,
+    thumb,
+    thumbBytes: thumb.length,
+    sourceColorProfile,
+    // It has been told what the file is, so it is no longer a guess.
+    missingColorProfile: false,
+  };
 }
 
 /**

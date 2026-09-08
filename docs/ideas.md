@@ -48,3 +48,17 @@ breaks the free-tier rule, and scraping Instagram breaks their terms.
 project's absolute rule (see AGENTS.md). Everything above reports numbers
 Instagram itself publishes, or tags that real posts actually used. Nothing is
 generated.
+
+## Reinterpreting a missing colour profile — BUILT
+
+This was listed here as hard. It is now done; the note is kept because the
+reasoning is worth not relitigating.
+
+Sharp converts FROM an embedded profile and has no way to reinterpret a file
+that has none. Two routes work: splice a profile into the file (verified, but
+format-specific — an APP2 marker for JPEG, an iCCP chunk for PNG), or do the
+transform directly. The direct route was chosen because it is
+format-independent and, crucially, checkable: the maths is asserted against
+Sharp own lcms conversion and agrees to within one level out of 255.
+
+See worker/src/lib/colour.ts.

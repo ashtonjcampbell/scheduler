@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { processForInstagram, describeProfile } from "./lib/image.js";
+import { reinterpretToSrgb } from "./lib/colour.js";
 
 /**
  * Proves the colour pipeline still does what it claims. Run it after any
@@ -170,6 +171,41 @@ async function main() {
     const ratio = topHalf.width / topHalf.height;
     check("the crop is measured against the upright image", Math.abs(ratio - 800 / 600) < 0.02,
       `got ${topHalf.width}x${topHalf.height}, expected 4:3`);
+  }
+
+  console.log("\nReinterpreting a file whose profile was missing");
+  {
+    const untagged = await sharp({
+      create: { width: 400, height: 300, channels: 3, background: { r: 30, g: 170, b: 90 } },
+    }).jpeg({ quality: 100 }).toBuffer();
+
+    const assumed = await processForInstagram(untagged);
+    const asAdobe = await processForInstagram(untagged, null, "adobe-rgb");
+
+    const assumedPx = await storedPixel(assumed.data);
+    const adobePx = await storedPixel(asAdobe.data);
+
+    check("assuming sRGB leaves the numbers alone",
+      Math.abs(assumedPx[0] - 30) <= 3 && Math.abs(assumedPx[1] - 170) <= 3,
+      assumedPx.join(","));
+
+    check("reinterpreting as Adobe RGB actually moves them",
+      Math.abs(adobePx[0] - assumedPx[0]) > 5,
+      assumedPx.join(",") + " -> " + adobePx.join(","));
+
+    check("the reinterpreted file still carries an sRGB profile",
+      Boolean((await sharp(asAdobe.data).metadata()).icc));
+
+    check("it is no longer reported as a guess", asAdobe.missingColorProfile === false);
+
+    // Neutrals must survive any of these transforms untouched, or every
+    // grey in the photo picks up a colour cast.
+    for (const profile of ["p3", "adobe-rgb"] as const) {
+      const grey = reinterpretToSrgb(Buffer.from([128, 128, 128]), profile);
+      check(`mid grey stays neutral through ${profile}`,
+        Math.max(...[0, 1, 2].map((i) => Math.abs(grey[i]! - 128))) <= 2,
+        grey.join(","));
+    }
   }
 
   console.log(

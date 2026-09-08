@@ -7,6 +7,7 @@ import { formatPacific } from "@/lib/time";
 import type { Photo, PhotoUsage } from "@/lib/database.types";
 import { trashPhoto, restorePhoto, deleteForever, retryPhoto, updateAltText } from "./actions";
 import { CropEditor } from "./crop-editor";
+import { setAssumedProfile } from "./crop-actions";
 
 export function PhotoCard({
   photo,
@@ -182,6 +183,33 @@ export function PhotoCard({
                   Retry
                 </button>
               )}
+
+              {/* Only offered where it can actually help: a file whose profile
+                  had to be guessed, and whose original is still around to
+                  re-read. */}
+              {photo.status === "ready" &&
+                photo.upload_path &&
+                photo.missing_color_profile && (
+                  <select
+                    disabled={pending}
+                    defaultValue={photo.assumed_profile ?? ""}
+                    onChange={(event) =>
+                      run(() =>
+                        setAssumedProfile(
+                          photo.id,
+                          (event.target.value || null) as "srgb" | "p3" | "adobe-rgb" | null,
+                        ),
+                      )
+                    }
+                    title="This photo had no colour profile, so sRGB was assumed. If it looks flat, tell the app what it really is."
+                    className="rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[10px] text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                  >
+                    <option value="">Assumed sRGB</option>
+                    <option value="p3">Really Display P3</option>
+                    <option value="adobe-rgb">Really Adobe RGB</option>
+                    <option value="srgb">Confirm sRGB</option>
+                  </select>
+                )}
 
               {photo.status === "ready" && photo.upload_path && (
                 <button

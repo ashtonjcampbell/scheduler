@@ -1,5 +1,6 @@
 import { serviceClient, log } from "./lib/supabase.js";
 import { processForInstagram, type Crop } from "./lib/image.js";
+import type { SourceProfile } from "./lib/colour.js";
 
 /**
  * Turns raw uploads into the colour-managed files Instagram will be given.
@@ -60,7 +61,7 @@ async function main() {
 
     const { data: pending, error } = await supabase
       .from("photos")
-      .select("id, original_filename, upload_path, crop_x, crop_y, crop_w, crop_h")
+      .select("id, original_filename, upload_path, crop_x, crop_y, crop_w, crop_h, assumed_profile")
       .eq("status", "pending")
       .not("upload_path", "is", null)
       .order("created_at", { ascending: true })
@@ -88,7 +89,13 @@ async function main() {
           ? { x: photo.crop_x, y: photo.crop_y, w: photo.crop_w, h: photo.crop_h }
           : null;
 
-      const ok = await processOne(photo.id, photo.upload_path!, photo.original_filename, crop);
+      const ok = await processOne(
+        photo.id,
+        photo.upload_path!,
+        photo.original_filename,
+        crop,
+        (photo.assumed_profile as SourceProfile | null) ?? null,
+      );
       if (ok) succeeded++;
       else failed++;
     }
@@ -126,6 +133,7 @@ async function processOne(
   uploadPath: string,
   filename: string,
   crop: Crop | null = null,
+  assumeProfile: SourceProfile | null = null,
 ): Promise<boolean> {
   const supabase = serviceClient();
 
@@ -162,7 +170,7 @@ async function processOne(
     }
 
     const input = Buffer.from(await blob.arrayBuffer());
-    const result = await processForInstagram(input, crop);
+    const result = await processForInstagram(input, crop, assumeProfile);
 
     const storagePath = `${id}.jpg`;
     const thumbPath = `thumbs/${id}.jpg`;

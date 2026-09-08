@@ -218,8 +218,7 @@ supabase/          SQL migrations
 - **Phase 6 — publishing: done.** The publish worker (verified end to end in
   dry run), the Instagram connection, and weekly token refresh.
 
-Still outstanding: tagging other accounts on a photo, and reinterpreting the
-colour profile of a file that arrived without one (see docs/ideas.md).
+Everything in the brief is built.
 
 The app ships with **dry run on**. The whole thing — queue, worker, publishing
 — runs end to end and logs exactly what it *would* post, without contacting
