@@ -6,6 +6,7 @@ import { photoUrl, thumbUrl, formatBytes, USAGE_LABELS } from "@/lib/photos";
 import { formatPacific } from "@/lib/time";
 import type { Photo, PhotoUsage } from "@/lib/database.types";
 import { trashPhoto, restorePhoto, deleteForever, retryPhoto, updateAltText } from "./actions";
+import { CropEditor } from "./crop-editor";
 
 export function PhotoCard({
   photo,
@@ -28,6 +29,7 @@ export function PhotoCard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [cropping, setCropping] = useState(false);
 
   const run = (action: () => Promise<{ error?: string }>) => {
     setError(null);
@@ -181,6 +183,16 @@ export function PhotoCard({
                 </button>
               )}
 
+              {photo.status === "ready" && photo.upload_path && (
+                <button
+                  type="button"
+                  onClick={() => setCropping(true)}
+                  className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-900 hover:underline dark:text-stone-400 dark:hover:text-stone-100"
+                >
+                  {photo.crop_aspect ? `Crop (${photo.crop_aspect})` : "Crop"}
+                </button>
+              )}
+
               {/* The grid shows a thumbnail to save bandwidth, so the real
                   processed file — the one Instagram receives, and the only
                   one worth judging colour on — needs a way to be seen. */}
@@ -231,6 +243,8 @@ export function PhotoCard({
 
         {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
       </figcaption>
+
+      {cropping && <CropEditor photo={photo} onClose={() => setCropping(false)} />}
     </figure>
   );
 }

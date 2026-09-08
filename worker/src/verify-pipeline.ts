@@ -109,6 +109,69 @@ async function main() {
   check("garbage input does not throw", describeProfile(Buffer.alloc(200)) === null);
   check("an empty buffer does not throw", describeProfile(undefined) === null);
 
+  console.log("\nCropping");
+  {
+    // 3:2 landscape, 1200x800.
+    const wide = await sharp({
+      create: { width: 1200, height: 800, channels: 3, background: { r: 30, g: 170, b: 90 } },
+    }).withIccProfile("srgb").jpeg().toBuffer();
+
+    // Square out of 1200x800 means taking 800 of the 1200 width: 2/3, centred.
+    const square = await processForInstagram(wide, { x: 1 / 6, y: 0, w: 2 / 3, h: 1 });
+    check("a 1:1 crop comes out square", square.width === square.height,
+      `${square.width}x${square.height}`);
+
+    // 4:5 at full height means 640 of the 1200 width.
+    const portrait = await processForInstagram(wide, { x: 7 / 30, y: 0, w: 8 / 15, h: 1 });
+    const ratio = portrait.width / portrait.height;
+    check("a 4:5 crop comes out 4:5", Math.abs(ratio - 0.8) < 0.01, ratio.toFixed(3));
+
+    check("the thumbnail is cropped to match",
+      await (async () => {
+        const m = await sharp(square.thumb).metadata();
+        return Math.abs((m.width ?? 0) / (m.height ?? 1) - 1) < 0.02;
+      })(),
+      "thumbnail aspect must match the full file");
+
+    const uncropped = await processForInstagram(wide);
+    check("no crop leaves the shape alone",
+      Math.abs(uncropped.width / uncropped.height - 1.5) < 0.01,
+      (uncropped.width / uncropped.height).toFixed(3));
+
+    // A crop that rounds past the edge must clamp, not throw.
+    const edge = await processForInstagram(wide, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
+    check("a crop flush to the edge does not throw", edge.width > 0);
+  }
+
+  console.log("\nCropping a photo the camera stored sideways");
+  {
+    /*
+     * The case that silently produces the wrong picture. A phone held in
+     * portrait usually stores the pixels landscape plus an EXIF orientation
+     * tag. metadata() reports the STORED size, but the pipeline crops the
+     * UPRIGHT image — so using the raw metadata numbers cuts the rectangle
+     * out of the wrong place. No error, just the wrong photo.
+     */
+    const stored = await sharp({
+      // Stored landscape: 1200 wide, 800 tall.
+      create: { width: 1200, height: 800, channels: 3, background: { r: 30, g: 170, b: 90 } },
+    })
+      .withMetadata({ orientation: 6 }) // "rotate 90° clockwise to view"
+      .withIccProfile("srgb")
+      .jpeg()
+      .toBuffer();
+
+    const meta = await sharp(stored).metadata();
+    check("the test file really is marked sideways", meta.orientation === 6,
+      `orientation ${meta.orientation}`);
+
+    // Upright it is 800x1200. Taking the top half should give 800x600.
+    const topHalf = await processForInstagram(stored, { x: 0, y: 0, w: 1, h: 0.5 });
+    const ratio = topHalf.width / topHalf.height;
+    check("the crop is measured against the upright image", Math.abs(ratio - 800 / 600) < 0.02,
+      `got ${topHalf.width}x${topHalf.height}, expected 4:3`);
+  }
+
   console.log(
     failures === 0
       ? "\nAll checks passed.\n"

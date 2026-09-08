@@ -1,5 +1,5 @@
 import { serviceClient, log } from "./lib/supabase.js";
-import { processForInstagram } from "./lib/image.js";
+import { processForInstagram, type Crop } from "./lib/image.js";
 
 /**
  * Turns raw uploads into the colour-managed files Instagram will be given.
@@ -60,7 +60,7 @@ async function main() {
 
     const { data: pending, error } = await supabase
       .from("photos")
-      .select("id, original_filename, upload_path")
+      .select("id, original_filename, upload_path, crop_x, crop_y, crop_w, crop_h")
       .eq("status", "pending")
       .not("upload_path", "is", null)
       .order("created_at", { ascending: true })
@@ -80,7 +80,15 @@ async function main() {
         break;
       }
 
-      const ok = await processOne(photo.id, photo.upload_path!, photo.original_filename);
+      const crop =
+        photo.crop_x !== null &&
+        photo.crop_y !== null &&
+        photo.crop_w !== null &&
+        photo.crop_h !== null
+          ? { x: photo.crop_x, y: photo.crop_y, w: photo.crop_w, h: photo.crop_h }
+          : null;
+
+      const ok = await processOne(photo.id, photo.upload_path!, photo.original_filename, crop);
       if (ok) succeeded++;
       else failed++;
     }
@@ -117,6 +125,7 @@ async function processOne(
   id: string,
   uploadPath: string,
   filename: string,
+  crop: Crop | null = null,
 ): Promise<boolean> {
   const supabase = serviceClient();
 
@@ -153,7 +162,7 @@ async function processOne(
     }
 
     const input = Buffer.from(await blob.arrayBuffer());
-    const result = await processForInstagram(input);
+    const result = await processForInstagram(input, crop);
 
     const storagePath = `${id}.jpg`;
     const thumbPath = `thumbs/${id}.jpg`;
@@ -201,6 +210,9 @@ async function processOne(
         processing_error: null,
         processed_at: new Date().toISOString(),
         claimed_at: null,
+        // The request has been honoured; clearing it stops a re-crop from
+        // looking permanently outstanding in the UI.
+        reprocess_requested_at: null,
       })
       .eq("id", id);
 

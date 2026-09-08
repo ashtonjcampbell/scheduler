@@ -58,20 +58,39 @@ export interface ProcessedImage {
   missingColorProfile: boolean;
 }
 
-export async function processForInstagram(input: Buffer): Promise<ProcessedImage> {
+/** A crop expressed as fractions of the upright image, 0-1. */
+export interface Crop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export async function processForInstagram(
+  input: Buffer,
+  crop?: Crop | null,
+): Promise<ProcessedImage> {
   const metadata = await sharp(input).metadata();
 
   const sourceColorProfile = describeProfile(metadata.icc);
   const missingColorProfile = !metadata.icc;
 
+  const extract = crop ? toPixels(crop, metadata) : null;
+
   for (const quality of QUALITY_STEPS) {
-    const { data, info } = await sharp(input, {
+    const pipeline = sharp(input, {
       // Honour the embedded profile. Explicit because this is the whole point.
       ignoreIcc: false,
       // Respect EXIF rotation, then drop the orientation tag, so the delivered
       // file is upright for anything that ignores EXIF.
       autoOrient: true,
-    })
+    });
+
+    // Crop first, then resize — cropping from full resolution and downscaling
+    // once keeps this a single pass and loses nothing to an intermediate.
+    if (extract) pipeline.extract(extract);
+
+    const { data, info } = await pipeline
       .resize({
         width: MAX_WIDTH,
         // Never upscale: enlarging a small file invents detail and costs bytes.
@@ -98,7 +117,7 @@ export async function processForInstagram(input: Buffer): Promise<ProcessedImage
         height: info.height,
         bytes: info.size,
         quality,
-        ...(await makeThumbnail(input)),
+        ...(await makeThumbnail(input, extract)),
         sourceColorProfile,
         missingColorProfile,
       };
@@ -118,14 +137,58 @@ export async function processForInstagram(input: Buffer): Promise<ProcessedImage
  * It runs the same ICC conversion, so the colours match what the full file
  * shows rather than drifting.
  */
-async function makeThumbnail(input: Buffer): Promise<{ thumb: Buffer; thumbBytes: number }> {
-  const thumb = await sharp(input, { ignoreIcc: false, autoOrient: true })
+async function makeThumbnail(
+  input: Buffer,
+  extract: sharp.Region | null,
+): Promise<{ thumb: Buffer; thumbBytes: number }> {
+  const pipeline = sharp(input, { ignoreIcc: false, autoOrient: true });
+
+  // The thumbnail must show the same framing as the delivered file, or the
+  // grid would quietly disagree with what actually gets posted.
+  if (extract) pipeline.extract(extract);
+
+  const thumb = await pipeline
     .resize({ width: THUMB_WIDTH, withoutEnlargement: true, fit: "inside" })
     .withIccProfile("srgb")
     .jpeg({ quality: 78, mozjpeg: true })
     .toBuffer();
 
   return { thumb, thumbBytes: thumb.length };
+}
+
+/**
+ * Turn a fractional crop into pixel coordinates.
+ *
+ * The trap here is EXIF orientation. `metadata()` reports the dimensions as
+ * STORED, but the pipeline runs with autoOrient, so `extract` operates on the
+ * UPRIGHT image. For a photo shot in portrait — orientation 6 or 8, which is
+ * most phone portraits — stored width and height are swapped relative to what
+ * the user framed their crop against. Using the raw metadata numbers would
+ * crop a rotated rectangle out of the wrong part of the image: not an error,
+ * just silently the wrong picture.
+ */
+function toPixels(
+  crop: Crop,
+  metadata: sharp.Metadata,
+): sharp.Region {
+  // Orientations 5-8 involve a 90° turn, so the upright image has the stored
+  // dimensions swapped.
+  const turned = (metadata.orientation ?? 1) >= 5;
+
+  const width = (turned ? metadata.height : metadata.width) ?? 0;
+  const height = (turned ? metadata.width : metadata.height) ?? 0;
+
+  // Round inward so rounding can never ask for a pixel outside the image,
+  // which sharp rejects outright.
+  const left = Math.max(0, Math.round(crop.x * width));
+  const top = Math.max(0, Math.round(crop.y * height));
+
+  return {
+    left,
+    top,
+    width: Math.max(1, Math.min(Math.round(crop.w * width), width - left)),
+    height: Math.max(1, Math.min(Math.round(crop.h * height), height - top)),
+  };
 }
 
 /**
