@@ -87,7 +87,28 @@ export type Hashtag = {
   id: string;
   category_id: string | null;
   tag: string;
+  /** Instagram's post count for this tag — the "volume". Big, hence number. */
+  post_count: number | null;
+  /** Retired tags stay in the library but are never offered by the shuffle. */
+  active: boolean;
+  notes: string | null;
   created_at: string;
+};
+
+/** A saved "how many from which categories" set for the shuffle. */
+export type HashtagRecipe = {
+  id: string;
+  name: string;
+  min_posts: number | null;
+  max_posts: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HashtagRecipeItem = {
+  recipe_id: string;
+  category_id: string;
+  count: number;
 };
 
 export type PostHashtag = {
@@ -192,7 +213,9 @@ export type Database = {
       post_photos: Table<PostPhoto, "id">;
       photo_tags: Table<PhotoTag, "id">;
       hashtag_categories: Table<HashtagCategory, Generated | "sort_order">;
-      hashtags: Table<Hashtag, Generated>;
+      hashtags: Table<Hashtag, Generated | "active">;
+      hashtag_recipes: Table<HashtagRecipe, Generated>;
+      hashtag_recipe_items: Table<HashtagRecipeItem, never>;
       post_hashtags: Table<PostHashtag, "position">;
       schedule_slots: Table<ScheduleSlot, Generated | "active">;
       notes: Table<Note, Generated | "title" | "content" | "content_html">;
