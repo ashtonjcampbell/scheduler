@@ -15,6 +15,7 @@ import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
 import { updatePost, setPostPhotos, setPostHashtags } from "../actions";
 import { PhotoPicker } from "./photo-picker";
 import { HashtagPanel, type PickedTag } from "./hashtag-panel";
+import { SchedulePanel } from "./schedule-panel";
 
 type LoadedPost = Post & {
   post_photos: Array<{ id: string; photo_id: string; position: number }>;
@@ -201,6 +202,8 @@ export function Composer({
         </div>
 
         <div className="space-y-5">
+          <SchedulePanel post={post} photoCount={photoIds.length} />
+
           <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="text-sm font-semibold">Where hashtags go</h2>
             <div className="mt-3 space-y-2">
