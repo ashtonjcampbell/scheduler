@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Weekly posting slots.
@@ -85,5 +86,100 @@ export async function updateSettings(fields: {
   if (error) return { error: error.message };
 
   revalidatePath("/settings");
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Instagram credentials
+// ---------------------------------------------------------------------------
+
+/**
+ * Save the Meta app credentials.
+ *
+ * These land in app_secrets, which deliberately has NO row-level security
+ * policies — so the browser can write them but can never read them back. Only
+ * the worker's service key can.
+ */
+export async function saveMetaCredentials(
+  appId: string,
+  appSecret: string,
+): Promise<{ error?: string }> {
+  const supabase = supabaseAdmin();
+
+  const id = appId.trim();
+  const secret = appSecret.trim();
+
+  if (!/^\d{5,}$/.test(id)) {
+    return { error: "An App ID is a long number — check you have copied the right field." };
+  }
+  if (secret.length < 16) {
+    return { error: "That App Secret looks too short." };
+  }
+
+  const { error } = await supabase
+    .from("app_secrets")
+    .update({ ig_app_id: id, ig_app_secret: secret })
+    .eq("id", true);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  return {};
+}
+
+/** Forget the Instagram connection. Dry run goes back on as a safety net. */
+export async function disconnectInstagram(): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  await supabaseAdmin()
+    .from("app_secrets")
+    .update({ ig_access_token: null, ig_user_access_token: null })
+    .eq("id", true);
+
+  const { error } = await supabase
+    .from("app_settings")
+    .update({
+      ig_user_id: null,
+      ig_username: null,
+      ig_page_id: null,
+      ig_page_name: null,
+      ig_connected_at: null,
+      ig_token_expires_at: null,
+      dry_run: true,
+    })
+    .eq("id", true);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  return {};
+}
+
+/**
+ * Turn dry run off — the moment posts start going out for real.
+ *
+ * Refuses unless Instagram is actually connected, because otherwise the
+ * publisher would simply fail at the next slot with nothing to publish through.
+ */
+export async function setDryRun(dryRun: boolean): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  if (!dryRun) {
+    const { data } = await supabase
+      .from("app_settings")
+      .select("ig_user_id")
+      .single();
+
+    if (!data?.ig_user_id) {
+      return { error: "Connect Instagram before turning dry run off." };
+    }
+  }
+
+  const { error } = await supabase.from("app_settings").update({ dry_run: dryRun }).eq("id", true);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  revalidatePath("/");
   return {};
 }

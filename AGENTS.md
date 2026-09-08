@@ -45,8 +45,13 @@ exactly the file we intend to deliver, and re-encoding would undo the work.
 - Everything must stay on a permanently free tier. No trials, no paid add-ons.
 - Sharp cannot run on Cloudflare Workers. Image processing belongs in
   `worker/`, which runs in GitHub Actions.
-- `SUPABASE_SERVICE_ROLE_KEY` bypasses row-level security. It belongs only in
-  `worker/`, never in anything the browser can reach.
+- `SUPABASE_SERVICE_ROLE_KEY` bypasses row-level security. It belongs in
+  `worker/` and in strictly server-side app code — the OAuth routes and the
+  settings page need it, because `app_secrets` has no read policy and that is
+  exactly what keeps Instagram tokens out of the browser. Reach it only via
+  `src/lib/supabase/admin.ts`, which imports `server-only` so a client
+  component importing it is a BUILD error rather than a leak found later.
+  Never return a token from a server component or action.
 - All wall-clock scheduling is `America/Los_Angeles`. Store UTC, render Pacific,
   and keep the conversion in `src/lib/time.ts`.
 - Weekly slots are stored as (weekday, local_time), not as instants, so a 10am

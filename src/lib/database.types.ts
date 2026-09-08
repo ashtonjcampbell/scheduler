@@ -169,6 +169,8 @@ export type AppSettings = {
   ig_user_id: string | null;
   ig_token_expires_at: string | null;
   ig_connected_at: string | null;
+  ig_page_id: string | null;
+  ig_page_name: string | null;
   hashtag_min: number;
   hashtag_max: number;
   /** Days after publishing before the full-size file is dropped. 0 = never. */
@@ -183,7 +185,10 @@ export type AppSecrets = {
   id: boolean;
   ig_app_id: string | null;
   ig_app_secret: string | null;
+  /** Page token — this is what publishes. */
   ig_access_token: string | null;
+  /** Long-lived user token — this is what the weekly refresh extends. */
+  ig_user_access_token: string | null;
   updated_at: string;
 };
 

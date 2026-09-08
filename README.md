@@ -1,4 +1,10 @@
-# Instagram Post Scheduler
+
+
+The service-role key is needed by the app as well as the worker: 
+has no read policy, which is what keeps Instagram tokens out of the browser,
+so the OAuth routes and the settings page reach it through
+. That module imports , so importing
+it from a client component fails the build rather than leaking.# Instagram Post Scheduler
 
 A private, single-user scheduling and content-organisation tool for one
 photography business's Instagram account. Replaces Buffer/Later. Every service
@@ -202,7 +208,11 @@ supabase/          SQL migrations
   worked out fresh on every read, and fixed-time posts the queue flows around.
   `npm run verify:queue` covers both daylight-saving changes.
 - **Phase 5 — grid preview, ideas, notepad: done.**
-- Phase 6 — publishing worker, token refresh, Meta connection
+- **Phase 6 — publishing: done.** The publish worker (verified end to end in
+  dry run), the Instagram connection, and weekly token refresh.
+
+Still outstanding: tagging other accounts on a photo, and reinterpreting the
+colour profile of a file that arrived without one (see docs/ideas.md).
 
 The app ships with **dry run on**. The whole thing — queue, worker, publishing
 — runs end to end and logs exactly what it *would* post, without contacting
