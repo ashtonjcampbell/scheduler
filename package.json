@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run verify:shuffle && npm run verify:queue && npm run build",
+    "check": "npm run typecheck && npm run lint && npm run verify:shuffle && npm run verify:queue && npm run verify:performance && npm run build",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -16,7 +16,8 @@
     "types:db": "supabase gen types typescript --linked > src/lib/database.types.generated.ts",
     "db:apply": "node scripts/apply-migrations.mjs",
     "verify:shuffle": "tsx scripts/verify-shuffle.ts",
-    "verify:queue": "tsx scripts/verify-queue.ts"
+    "verify:queue": "tsx scripts/verify-queue.ts",
+    "verify:performance": "tsx scripts/verify-performance.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

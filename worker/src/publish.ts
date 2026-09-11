@@ -3,6 +3,7 @@ import { publish, publishingLimitRemaining, InstagramError } from "./lib/instagr
 // Shared with the app so the worker and the queue page can never disagree
 // about whose turn it is.
 import { syncGrid } from "./sync-grid.js";
+import { syncPerformance } from "./sync-performance.js";
 import { assignQueue } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
@@ -56,6 +57,14 @@ async function main() {
   // Instagram media URLs are signed and short-lived, so the cached grid is
   // refreshed every run rather than only when something publishes.
   await syncGrid().catch(() => {});
+
+  /*
+   * Performance costs an API call per post, so unlike the grid it is not worth
+   * doing four times an hour — a post's reach does not change meaningfully
+   * between two runs twenty minutes apart. Neither sync is allowed to fail the
+   * publishing it is riding along with.
+   */
+  await refreshPerformanceIfStale().catch(() => {});
 
   const due = await findDue();
 
@@ -313,6 +322,32 @@ async function buildPayload(
     firstComment: placement === "first_comment" && rendered ? rendered : null,
     userTags,
   };
+}
+
+/**
+ * Refresh the performance figures at most a few times a day.
+ *
+ * It rides on the publishing cron rather than a workflow of its own, so there
+ * is one scheduled job to keep alive instead of two. While a backfill is still
+ * working through history the sync asks to be run again sooner.
+ */
+const PERFORMANCE_EVERY_HOURS = 6;
+
+async function refreshPerformanceIfStale() {
+  const supabase = serviceClient();
+
+  const { data } = await supabase
+    .from("app_settings")
+    .select("performance_synced_at")
+    .single();
+
+  const last = data?.performance_synced_at ? new Date(data.performance_synced_at).getTime() : 0;
+  const due = Date.now() - last > PERFORMANCE_EVERY_HOURS * 60 * 60 * 1000;
+
+  if (!due) return;
+
+  const { seen, measured } = await syncPerformance();
+  if (measured > 0) console.log(`Performance: ${measured} of ${seen} post(s) measured.`);
 }
 
 /** Hand back posts stranded mid-publish by a run that died. */

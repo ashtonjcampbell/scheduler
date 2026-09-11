@@ -180,6 +180,7 @@ export type AppSettings = {
   /** Days an original is kept so crops stay lossless. 0 = keep forever. */
   keep_originals_days: number;
   grid_synced_at: string | null;
+  performance_synced_at: string | null;
   updated_at: string;
 };
 
@@ -193,6 +194,25 @@ export type InstagramMedia = {
   thumbnail_url: string | null;
   caption: string | null;
   posted_at: string | null;
+  fetched_at: string;
+};
+
+/** How a post that is already live actually did. */
+export type MediaPerformance = {
+  id: string;
+  posted_at: string;
+  media_type: string | null;
+  permalink: string | null;
+  like_count: number | null;
+  comments_count: number | null;
+  /** Everything below needs instagram_manage_insights, so it may be absent. */
+  reach: number | null;
+  views: number | null;
+  saved: number | null;
+  shares: number | null;
+  total_interactions: number | null;
+  profile_visits: number | null;
+  follows: number | null;
   fetched_at: string;
 };
 
@@ -264,6 +284,7 @@ export type Database = {
       notes: Table<Note, Generated | "title" | "content" | "content_html">;
       publish_log: Table<PublishLogEntry, "id" | "at" | "level">;
       instagram_media: Table<InstagramMedia, "fetched_at">;
+      media_performance: Table<MediaPerformance, "fetched_at">;
       app_settings: Table<AppSettings, keyof AppSettings>;
       app_secrets: Table<AppSecrets, keyof AppSecrets>;
     };
