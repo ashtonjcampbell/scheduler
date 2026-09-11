@@ -48,8 +48,16 @@ export function MediaGrid({
 
   return (
     <>
+      {/*
+        Pinned directly under the nav bar, whose height `top-14` matches.
+
+        It was `bottom-4` before, which sounds equivalent and is not: with a
+        library this long, a selection made near the top left the button
+        several screens below, and reaching it meant scrolling away from the
+        photos you were choosing between.
+      */}
       {selected.length > 0 && (
-        <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-3 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+        <div className="sticky top-14 z-10 mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-3 shadow-lg dark:border-stone-700 dark:bg-stone-900">
           <span className="text-sm font-medium">
             {selected.length} selected
             {selected.length > 1 && (

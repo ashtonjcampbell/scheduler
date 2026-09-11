@@ -82,8 +82,20 @@ export function GridBoard({
     startTransition(async () => {
       // Newest-first on screen, next-first in the queue.
       const result = await reorderQueue([...next].reverse());
-      if (result.error) setError(result.error);
-      else router.refresh();
+
+      /*
+       * Only re-render the page if the save FAILED.
+       *
+       * On success there is nothing to fetch: the dates belong to the
+       * positions and stay where they are, so the screen already shows the
+       * result. Refreshing anyway meant every drag paid for a full re-render
+       * of the grid — six queries and a re-layout — on top of the write, which
+       * is how dragging managed to exhaust the request budget.
+       */
+      if (result.error) {
+        setError(result.error);
+        router.refresh();
+      }
     });
   };
 

@@ -27,7 +27,9 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-stone-50/85 backdrop-blur dark:border-stone-800 dark:bg-stone-950/85">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
+        {/* A fixed height, not padding: anything else that pins itself below
+            this bar needs to know exactly how tall it is. */}
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
           <span className="text-sm font-semibold tracking-tight">Scheduler</span>
 
           <NavLinks />

@@ -100,17 +100,21 @@ export async function removeFromQueue(
 export async function reorderQueue(orderedIds: string[]): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
 
-  // Sequential rather than parallel: these are a handful of rows, and doing
-  // them in order makes a partial failure leave a sane prefix.
-  for (const [position, id] of orderedIds.entries()) {
-    const { error } = await supabase
-      .from("posts")
-      .update({ queue_position: position })
-      .eq("id", id)
-      .eq("status", "queued");
-
-    if (error) return { error: error.message };
-  }
+  /*
+   * One statement, not one per post.
+   *
+   * This was a loop of sequential updates, which is a dozen round trips for
+   * what is conceptually a single edit — and dragging a tile is the action
+   * most likely to be repeated quickly, so it is the worst place to be
+   * wasteful. It was enough to exhaust the request budget on Cloudflare's free
+   * tier and fail the whole page.
+   *
+   * It is also atomic now: the loop could stop half way and leave the queue in
+   * an order nobody chose, which is exactly what running out of budget part
+   * way through would have done.
+   */
+  const { error } = await supabase.rpc("reorder_queue", { ids: orderedIds });
+  if (error) return { error: error.message };
 
   revalidate();
   return {};

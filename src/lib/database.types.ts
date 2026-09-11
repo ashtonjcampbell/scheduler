@@ -305,7 +305,13 @@ export type Database = {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      /** Rewrites the whole running order in one atomic statement. */
+      reorder_queue: {
+        Args: { ids: string[] };
+        Returns: undefined;
+      };
+    };
     Enums: {
       photo_status: PhotoStatus;
       post_status: PostStatus;
