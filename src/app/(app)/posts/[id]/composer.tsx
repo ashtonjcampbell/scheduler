@@ -287,13 +287,53 @@ export function Composer({
                 <> Hashtags are not counted above — they go in the first comment.</>
               )}
             </p>
-          </section>
 
-          <PreviewPanel plan={plan} placement={placement} />
+            {/*
+              The whole caption used to be reprinted below this box under
+              "Exactly what gets posted". Reading the same words twice is noise,
+              and the box above is already exactly what gets posted.
+
+              What is NOT visible in the box is the part that goes somewhere
+              else — so that is all that is shown, right where it belongs.
+            */}
+            {placement === "first_comment" && plan.firstComment && (
+              <div className="mt-3 border-t border-stone-200 pt-3 dark:border-stone-800">
+                <h3 className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                  First comment
+                </h3>
+                <p className="mt-1.5 break-words rounded-lg bg-stone-50 p-2.5 text-sm leading-relaxed dark:bg-stone-950">
+                  {plan.firstComment}
+                </p>
+              </div>
+            )}
+
+            {placement === "caption" && appended.length > 0 && (
+              <div className="mt-3 border-t border-stone-200 pt-3 dark:border-stone-800">
+                <h3 className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                  Added to the end of the caption
+                </h3>
+                <p className="mt-1.5 break-words rounded-lg bg-stone-50 p-2.5 text-sm leading-relaxed dark:bg-stone-950">
+                  {appended.map((tag) => `#${tag}`).join(" ")}
+                </p>
+              </div>
+            )}
+
+            {plan.overBy > 0 && (
+              <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+                {plan.overBy} characters over Instagram&rsquo;s limit — it will
+                be refused as it stands.
+              </p>
+            )}
+          </section>
         </div>
 
         <div className="space-y-5">
-          <SchedulePanel post={post} photoCount={photoIds.length} />
+          <SchedulePanel
+            post={post}
+            photoCount={photoIds.length}
+            hasCaption={caption.trim().length > 0}
+            unsaved={dirty}
+          />
 
           <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="text-sm font-semibold">Where hashtags go</h2>
@@ -368,43 +408,6 @@ export function Composer({
  * The exact text that will be sent, rendered from the same function the
  * publishing worker uses — so this cannot drift from what actually goes out.
  */
-function PreviewPanel({
-  plan,
-  placement,
-}: {
-  plan: ReturnType<typeof planCaption>;
-  placement: HashtagPlacement;
-}) {
-  return (
-    <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-      <h2 className="text-sm font-semibold">Exactly what gets posted</h2>
-
-      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-stone-50 p-3 font-sans text-sm leading-relaxed dark:bg-stone-950">
-        {plan.caption || (
-          <span className="text-stone-400 dark:text-stone-600">Nothing yet.</span>
-        )}
-      </pre>
-
-      {plan.firstComment && (
-        <>
-          <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            First comment
-          </h3>
-          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-stone-50 p-3 font-sans text-sm dark:bg-stone-950">
-            {plan.firstComment}
-          </pre>
-        </>
-      )}
-
-      {placement === "first_comment" && !plan.firstComment && (
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          No hashtags yet, so there will be no first comment.
-        </p>
-      )}
-    </section>
-  );
-}
-
 function SaveIndicator({
   state,
   dirty,

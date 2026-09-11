@@ -76,12 +76,32 @@ export async function scheduleFixed(
 
   const supabase = await supabaseServer();
 
+  /*
+   * Pinning a time IS the commitment — it does not need confirming twice.
+   *
+   * It used to only set the time, leaving `ready` false, so a post could be
+   * marked "Scheduled ... Friday 6pm" and then silently not go out. Naming an
+   * exact moment is about as clear a statement of intent as there is; asking
+   * for a second button afterwards was asking the same question twice and
+   * punishing the obvious answer.
+   *
+   * Which means the readiness checks belong here too, in the same words.
+   */
+  const { data: post } = await supabase
+    .from("posts")
+    .select("caption, status")
+    .eq("id", postId)
+    .single();
+
+  if (post?.status === "published") return { error: "That post has already gone out." };
+
   const { count } = await supabase
     .from("post_photos")
     .select("*", { head: true, count: "exact" })
     .eq("post_id", postId);
 
   if (!count) return { error: "Add at least one photo before scheduling this." };
+  if (!post?.caption?.trim()) return { error: "Write a caption before scheduling this." };
 
   const { error } = await supabase
     .from("posts")
@@ -89,6 +109,7 @@ export async function scheduleFixed(
       status: "scheduled",
       schedule_mode: "fixed",
       scheduled_for: when.toISOString(),
+      ready: true,
       queue_position: null,
       slot_id: null,
     })

@@ -15,7 +15,17 @@ import { scheduleFixed, setDraftState } from "../../queue/actions";
  * separate decisions: pinning a post to an exact instant instead of taking its
  * turn, and setting one aside as not a post yet.
  */
-export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: number }) {
+export function SchedulePanel({
+  post,
+  photoCount,
+  hasCaption,
+  unsaved,
+}: {
+  post: Post;
+  photoCount: number;
+  hasCaption: boolean;
+  unsaved: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +43,18 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
   const published = post.status === "published";
   const publishing = post.status === "publishing";
   const locked = published || publishing;
-  const ready = photoCount > 0;
+  /*
+   * Scheduling now publishes, so it asks for the same things queueing does.
+   * Anything less would let a post be pinned to Friday 6pm and then quietly
+   * not go out, which is the trap this panel used to set.
+   */
+  const blocked = unsaved
+    ? "Save your changes first"
+    : photoCount === 0
+      ? "Add at least one photo first"
+      : !hasCaption
+        ? "Write a caption first"
+        : null;
 
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
@@ -51,9 +72,9 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
         </p>
       ) : (
         <>
-          {!ready && (
+          {blocked && (
             <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Add at least one photo before scheduling.
+              {blocked} to pin a time.
             </p>
           )}
 
@@ -64,14 +85,15 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
             <div>
               <p className="text-xs font-medium">Or pin an exact time</p>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                For anything genuinely time-sensitive. The queue works around it.
+                For anything genuinely time-sensitive. This sends it — no need
+                to add it to the queue as well. The queue works around it.
               </p>
 
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <DateTimePicker value={when} onChange={setWhen} disabled={pending} />
                 <button
                   type="button"
-                  disabled={pending || !when || !ready}
+                  disabled={pending || !when || blocked !== null}
                   onClick={() =>
                     // The picker gives a local wall-clock string with no zone.
                     // It is interpreted as Pacific, because that is the only
