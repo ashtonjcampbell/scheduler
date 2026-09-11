@@ -41,6 +41,14 @@ export type PhotoShape = {
   id: string;
   width: number | null;
   height: number | null;
+  /**
+   * Finished processing.
+   *
+   * A photo being re-cropped still carries the dimensions it had BEFORE the
+   * crop, which are about to be wrong. Judging the carousel on those would
+   * bless a post that is about to change shape underneath it.
+   */
+  ready: boolean;
 };
 
 export type ShapeVerdict =
@@ -53,6 +61,8 @@ export function carouselShape(photos: readonly PhotoShape[]): ShapeVerdict {
   const measured = photos
     .map((p) => (p.width && p.height ? p.width / p.height : null))
     .filter((r): r is number => r !== null && Number.isFinite(r) && r > 0);
+
+  if (photos.some((p) => !p.ready)) return { ok: false, kind: "unknown" };
 
   if (measured.length === 0) return { ok: true };
 

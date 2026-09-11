@@ -90,7 +90,15 @@ export function PhotoPicker({
                   : "relative w-24 cursor-grab overflow-hidden rounded border border-stone-200 dark:border-stone-700"
               }
             >
-              {thumbUrl(photo) && (
+              {photo.status !== "ready" ? (
+                // Cropping sends a photo back through processing. Saying so is
+                // the difference between "working" and "my photo vanished".
+                <span className="flex aspect-square w-full flex-col items-center justify-center gap-1 bg-stone-100 px-1 text-center text-[10px] text-stone-500 dark:bg-stone-950 dark:text-stone-400">
+                  <span>{photo.status === "failed" ? "failed" : "cropping…"}</span>
+                  <span className="text-[9px] opacity-70">refresh shortly</span>
+                </span>
+              ) : (
+                thumbUrl(photo) && (
                 // Plain <img> on purpose: this file is already exactly what
                 // Instagram will receive, and re-encoding it risks the colour
                 // shift the whole pipeline exists to prevent.
@@ -100,6 +108,7 @@ export function PhotoPicker({
                   alt={photo.alt_text ?? photo.original_filename}
                   className="aspect-square w-full object-cover"
                 />
+                )
               )}
 
               <span className="absolute left-1 top-1 rounded bg-stone-900/80 px-1 text-[10px] font-semibold text-white">

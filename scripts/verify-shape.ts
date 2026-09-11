@@ -19,7 +19,12 @@ function check(what: string, actual: unknown, expected: unknown) {
   }
 }
 
-const p = (id: string, width: number | null, height: number | null) => ({ id, width, height });
+const p = (id: string, width: number | null, height: number | null, ready = true) => ({
+  id,
+  width,
+  height,
+  ready,
+});
 
 console.log("\nthe carousel that went out wrong");
 {
@@ -76,8 +81,18 @@ console.log("\nrounding must not read as a different shape");
 console.log("\nunmeasured photos are not assumed fine");
 {
   const pending = carouselShape([p("a", 1440, 1800), p("b", null, null)]);
-  check("a photo still processing is refused", pending.ok, false);
+  check("a photo with no dimensions is refused", pending.ok, false);
   check("as unknown rather than guessed", pending.ok === false && pending.kind, "unknown");
+}
+
+console.log("\na photo being re-cropped carries dimensions about to change");
+{
+  // Both read 4:5 right now — but one is mid-crop, so those numbers describe
+  // the photo it USED to be. Approving this blesses a shape that is already
+  // on its way out.
+  const cropping = carouselShape([p("a", 1440, 1800), p("b", 1440, 1800, false)]);
+  check("is refused even though both look right", cropping.ok, false);
+  check("as unknown", cropping.ok === false && cropping.kind, "unknown");
 }
 
 console.log("\ndescribeShape");

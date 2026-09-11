@@ -207,7 +207,12 @@ export function Composer({
       photoIds
         .map((id) => byId.get(id))
         .filter((p): p is Photo => !!p)
-        .map((p) => ({ id: p.id, width: p.width, height: p.height })),
+        .map((p) => ({
+          id: p.id,
+          width: p.width,
+          height: p.height,
+          ready: p.status === "ready",
+        })),
     );
   }, [photoIds, libraryPhotos]);
 
