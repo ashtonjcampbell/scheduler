@@ -149,11 +149,11 @@ export function GridBoard({
                       alt=""
                       loading="lazy"
                       draggable={false}
-                      className={
-                        occupant.status === "published"
-                          ? "h-full w-full object-cover"
-                          : "h-full w-full object-cover opacity-70 transition group-hover:opacity-100"
-                      }
+                      // Never dimmed, published or not. The whole purpose of
+                      // this page is judging how the photos sit together, and
+                      // fading the unpublished ones changes the very thing
+                      // being judged. The status dot says what is planned.
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <span className="flex h-full items-center justify-center px-2 text-center text-[10px] text-stone-400">
