@@ -206,7 +206,18 @@ create table if not exists photo_tags (
   unique (post_photo_id, username)
 );
 
-create index if not exists photo_tags_post_photo_idx on photo_tags (post_photo_id);
+-- Guarded because 0010 replaces this table with a different shape. An early
+-- migration must survive being re-run against a schema a later one has
+-- superseded, or `npm run db:apply` stops working the moment anything is
+-- restructured.
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'photo_tags' and column_name = 'post_photo_id'
+  ) then
+    create index if not exists photo_tags_post_photo_idx on photo_tags (post_photo_id);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Post <-> hashtag

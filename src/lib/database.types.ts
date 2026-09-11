@@ -179,7 +179,21 @@ export type AppSettings = {
   archive_published_after_days: number;
   /** Days an original is kept so crops stay lossless. 0 = keep forever. */
   keep_originals_days: number;
+  grid_synced_at: string | null;
   updated_at: string;
+};
+
+/** A cached copy of what is already live on the Instagram grid. */
+export type InstagramMedia = {
+  id: string;
+  permalink: string | null;
+  media_type: string | null;
+  /** Signed and short-lived, hence fetched_at. */
+  media_url: string | null;
+  thumbnail_url: string | null;
+  caption: string | null;
+  posted_at: string | null;
+  fetched_at: string;
 };
 
 /** Service-role only. Never selected from browser code. */
@@ -249,6 +263,7 @@ export type Database = {
       schedule_slots: Table<ScheduleSlot, Generated | "active">;
       notes: Table<Note, Generated | "title" | "content" | "content_html">;
       publish_log: Table<PublishLogEntry, "id" | "at" | "level">;
+      instagram_media: Table<InstagramMedia, "fetched_at">;
       app_settings: Table<AppSettings, keyof AppSettings>;
       app_secrets: Table<AppSecrets, keyof AppSecrets>;
     };

@@ -2,6 +2,7 @@ import { serviceClient, log } from "./lib/supabase.js";
 import { publish, publishingLimitRemaining, InstagramError } from "./lib/instagram.js";
 // Shared with the app so the worker and the queue page can never disagree
 // about whose turn it is.
+import { syncGrid } from "./sync-grid.js";
 import { assignQueue } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
@@ -51,6 +52,10 @@ async function main() {
     await log("error", "Dry run is off but Instagram is not connected — nothing was published");
     return;
   }
+
+  // Instagram media URLs are signed and short-lived, so the cached grid is
+  // refreshed every run rather than only when something publishes.
+  await syncGrid().catch(() => {});
 
   const due = await findDue();
 

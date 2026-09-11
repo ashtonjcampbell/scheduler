@@ -17,6 +17,7 @@ import { updatePost, setPostPhotos, setPostHashtags } from "../actions";
 import { PhotoPicker } from "./photo-picker";
 import { HashtagPanel, type PickedTag } from "./hashtag-panel";
 import { SchedulePanel } from "./schedule-panel";
+import { PostHeader } from "./post-header";
 import { TagEditor } from "./tag-editor";
 
 type LoadedPost = Post & {
@@ -157,6 +158,12 @@ export function Composer({
         />
         <SaveIndicator state={saveState} />
       </div>
+
+      <PostHeader
+        post={post}
+        photoCount={photoIds.length}
+        hasCaption={caption.trim().length > 0}
+      />
 
       {error && (
         <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">

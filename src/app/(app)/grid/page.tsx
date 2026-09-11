@@ -33,6 +33,17 @@ export default async function GridPage() {
       supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
     ]);
 
+  // What is already live on Instagram, so the preview sits above reality
+  // rather than floating on its own.
+  const [{ data: liveMedia }, { data: settings }] = await Promise.all([
+    supabase
+      .from("instagram_media")
+      .select("*")
+      .order("posted_at", { ascending: false })
+      .limit(36),
+    supabase.from("app_settings").select("ig_username, grid_synced_at").single(),
+  ]);
+
   if (error) {
     return (
       <p className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -98,12 +109,14 @@ export default async function GridPage() {
         <h1 className="text-xl font-semibold tracking-tight">Grid preview</h1>
         <p className="mt-1 max-w-2xl text-sm text-stone-600 dark:text-stone-400">
           How your profile will look once everything has gone out — newest
-          first, the way Instagram shows it. Rough drafts are left out.
+          first, the way Instagram shows it, in the 4:5 tiles it now uses.
+          Rough drafts are left out.
         </p>
       </div>
 
       <p className="text-xs text-stone-500 dark:text-stone-400">
-        {upcoming} still to come · {published} published
+        {upcoming} still to come · {published} published here
+        {(liveMedia ?? []).length > 0 && ` · ${(liveMedia ?? []).length} already on @${settings?.ig_username}`}
       </p>
 
       {tiles.length === 0 ? (
@@ -118,7 +131,7 @@ export default async function GridPage() {
                 key={tile.id}
                 href={`/posts/${tile.id}`}
                 title={`${tile.title ?? firstLine(tile.caption) ?? "Untitled"}${tile.at ? ` — ${formatPacific(tile.at)}` : ""}`}
-                className="group relative block aspect-square overflow-hidden bg-stone-100 dark:bg-stone-950"
+                className="group relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
               >
                 {tile.cover ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -153,6 +166,48 @@ export default async function GridPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {(liveMedia ?? []).length > 0 ? (
+        <section className="mx-auto max-w-md">
+          <div className="flex items-baseline justify-between gap-2 border-t border-stone-200 pt-4 dark:border-stone-800">
+            <h2 className="text-sm font-semibold">Already on Instagram</h2>
+            {settings?.grid_synced_at && (
+              <span className="text-[11px] text-stone-400 dark:text-stone-500">
+                synced {formatPacific(settings.grid_synced_at)}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 grid grid-cols-3 gap-0.5">
+            {(liveMedia ?? []).map((item) => (
+              <a
+                key={item.id}
+                href={item.permalink ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                title={item.caption ?? undefined}
+                className="relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
+              >
+                {/* A video has no usable still of its own; its thumbnail is
+                    what the grid shows. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.thumbnail_url ?? item.media_url ?? ""}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <p className="mx-auto max-w-md border-t border-stone-200 pt-4 text-center text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+          Connect Instagram in Settings to see your existing posts here, below
+          the ones still to come. Reading your grid works whether or not dry run
+          is on.
+        </p>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-stone-500 dark:text-stone-400">

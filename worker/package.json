@@ -9,7 +9,8 @@
     "publish": "tsx src/publish.ts",
     "refresh-token": "tsx src/refresh-token.ts",
     "typecheck": "tsc --noEmit",
-    "verify-pipeline": "tsx src/verify-pipeline.ts"
+    "verify-pipeline": "tsx src/verify-pipeline.ts",
+    "sync-grid": "tsx src/sync-grid.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
