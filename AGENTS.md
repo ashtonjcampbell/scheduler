@@ -39,6 +39,18 @@ exactly the file we intend to deliver, and re-encoding would undo the work.
 - Captions: 2,200 characters, plain text only
 - Music: cannot be attached via the API at all
 - No artificial post-count caps; the real ceiling is 100 per rolling 24h
+- **Location tagging**: not achievable. Publishing takes a `location_id`, but
+  that is a Facebook Page id and the only way to find one is the Place Search
+  API, which Meta deprecated for third parties in v8.0 — verified, it returns
+  "deprecated for third parties effective v8.0". `pages/search` is the other
+  route and needs Page Public Content Access, a reviewed feature;
+  `pages_read_engagement` is NOT enough despite the error message saying so, as
+  it only covers Pages you administer (verified against this app's own token,
+  which has it). Do not re-attempt without that feature being granted.
+- **Collaborators / co-authors**: not exposed. `coauthor_producers` is not a
+  readable field on IG media and there is no publishing parameter for it.
+- Tagging accounts IN a photo *is* supported, and is built — see `photo_tags`
+  and the tag editor. Not the same feature as collaborators.
 
 ## Architecture constraints
 

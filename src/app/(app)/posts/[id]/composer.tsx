@@ -34,7 +34,6 @@ type LoadedPost = Post & {
  * the post. Saving is now deliberate, which is what makes discarding possible.
  */
 type Snapshot = {
-  title: string;
   caption: string;
   placement: HashtagPlacement;
   photoIds: string[];
@@ -43,7 +42,6 @@ type Snapshot = {
 
 function snapshotOf(post: LoadedPost): Snapshot {
   return {
-    title: post.title ?? "",
     caption: post.caption,
     placement: post.hashtag_placement,
     photoIds: [...post.post_photos].sort((a, b) => a.position - b.position).map((p) => p.photo_id),
@@ -78,7 +76,6 @@ export function Composer({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [title, setTitle] = useState(() => snapshotOf(post).title);
   const [caption, setCaption] = useState(() => snapshotOf(post).caption);
   const [placement, setPlacement] = useState<HashtagPlacement>(
     () => snapshotOf(post).placement,
@@ -119,8 +116,8 @@ export function Composer({
   // --- saving ---------------------------------------------------------------
 
   const current: Snapshot = useMemo(
-    () => ({ title, caption, placement, photoIds, picked }),
-    [title, caption, placement, photoIds, picked],
+    () => ({ caption, placement, photoIds, picked }),
+    [caption, placement, photoIds, picked],
   );
 
   const dirty = !same(current, saved);
@@ -130,7 +127,7 @@ export function Composer({
     setError(null);
 
     const results = await Promise.all([
-      updatePost(post.id, { title, caption, hashtag_placement: placement }),
+      updatePost(post.id, { caption, hashtag_placement: placement }),
       setPostPhotos(post.id, photoIds),
       setPostHashtags(post.id, picked),
     ]);
@@ -142,13 +139,12 @@ export function Composer({
       return;
     }
 
-    setSaved({ title, caption, placement, photoIds, picked });
+    setSaved({ caption, placement, photoIds, picked });
     setSaveState("saved");
     startTransition(() => router.refresh());
-  }, [post.id, title, caption, placement, photoIds, picked, router]);
+  }, [post.id, caption, placement, photoIds, picked, router]);
 
   const discard = useCallback(() => {
-    setTitle(saved.title);
     setCaption(saved.caption);
     setPlacement(saved.placement);
     setPhotoIds(saved.photoIds);
@@ -204,13 +200,11 @@ export function Composer({
 
   return (
     <div className="space-y-5">
+      {/* No title field. It was an internal name that never left the app, and
+          the caption's first line already identifies a post everywhere one
+          needs identifying — so it was a box to fill in for nothing. */}
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Internal name (never posted)"
-          className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-stone-500 dark:border-stone-700 dark:bg-stone-900"
-        />
+        <span className="mr-auto" />
         <SaveIndicator state={saveState} dirty={dirty} />
 
         <button

@@ -34,7 +34,7 @@ export default async function PostsPage() {
     await Promise.all([
       supabase
         .from("posts")
-        .select("id, title, caption, status, scheduled_for, published_at, updated_at")
+        .select("id, caption, status, scheduled_for, published_at, updated_at")
         .order("updated_at", { ascending: false }),
       supabase.from("post_photos").select("post_id, photo_id, position"),
       supabase.from("photos").select("id, storage_path, thumb_path, status").is("deleted_at", null),
@@ -111,7 +111,7 @@ export default async function PostsPage() {
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {post.title ?? firstLine(post.caption) ?? "Untitled post"}
+                      {firstLine(post.caption) ?? "Untitled post"}
                     </p>
 
                     <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">

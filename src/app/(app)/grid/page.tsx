@@ -32,7 +32,7 @@ export default async function GridPage() {
       supabase
         .from("posts")
         .select(
-          "id, title, caption, status, ready, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
+          "id, caption, status, ready, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
         )
         .in("status", ["preview_draft", "queued", "scheduled", "publishing", "published"]),
       supabase.from("schedule_slots").select("*"),
@@ -148,7 +148,6 @@ export default async function GridPage() {
         <GridBoard
           planned={planned.map((t) => ({
             id: t.id,
-            title: t.title,
             caption: t.caption,
             status: t.status,
             ready: t.ready,

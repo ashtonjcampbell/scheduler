@@ -16,7 +16,7 @@ export default async function QueuePage() {
       supabase.from("schedule_slots").select("*"),
       supabase
         .from("posts")
-        .select("id, title, caption, status, ready, scheduled_for, queue_position, schedule_mode")
+        .select("id, caption, status, ready, scheduled_for, queue_position, schedule_mode")
         .in("status", ["queued", "scheduled", "publishing"]),
       supabase.from("post_photos").select("post_id, photo_id, position"),
       supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
@@ -31,13 +31,29 @@ export default async function QueuePage() {
   }
 
   const all = posts ?? [];
+
+  /*
+   * ONLY posts that will actually go out.
+   *
+   * Drafts hold a place in the running order too — that is what lets the grid
+   * show them at the date they are meant for — but they are not in the queue
+   * and listing them here says they are. This page answers one question: what
+   * is going out, and when. Planning happens on the grid, by dragging.
+   *
+   * Their slots are worked out from the ready posts alone, which is also what
+   * the worker does: an unfinished post is passed over and the next ready one
+   * takes the slot. Counting drafts here would push every date later than the
+   * day it will really happen.
+   */
   const queued = all
-    .filter((p) => p.status === "queued")
+    .filter((p) => p.status === "queued" && p.ready)
     .sort(
       (a, b) =>
         (a.queue_position ?? Number.MAX_SAFE_INTEGER) -
         (b.queue_position ?? Number.MAX_SAFE_INTEGER),
     );
+
+  const waiting = all.filter((p) => p.status === "queued" && !p.ready).length;
   const fixed = all
     .filter((p) => p.status !== "queued" && p.scheduled_for)
     .sort((a, b) => (a.scheduled_for ?? "").localeCompare(b.scheduled_for ?? ""));
@@ -104,14 +120,24 @@ export default async function QueuePage() {
         </p>
       )}
 
+      {waiting > 0 && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          {waiting} draft{waiting === 1 ? "" : "s"} also hold a place in the
+          running order. They are not in the queue and will not publish — see
+          them, and reorder everything, on the{" "}
+          <Link href="/grid" className="underline underline-offset-2">
+            grid
+          </Link>
+          .
+        </p>
+      )}
+
       <QueueList
         queued={queued.map((post) => ({
           id: post.id,
-          title: post.title,
           caption: post.caption,
           cover: coverFor.get(post.id) ?? null,
           at: timeFor.get(post.id)?.toISOString() ?? null,
-          ready: post.ready,
         }))}
         unassigned={unassigned}
       />
@@ -137,7 +163,7 @@ export default async function QueuePage() {
 
                   <Link href={`/posts/${post.id}`} className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {post.title ?? firstLine(post.caption) ?? "Untitled post"}
+                      {firstLine(post.caption) ?? "Untitled post"}
                     </p>
                     <p
                       className={

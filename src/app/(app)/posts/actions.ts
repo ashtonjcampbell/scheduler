@@ -32,7 +32,6 @@ export async function createPost(): Promise<never> {
   const { data, error } = await supabase
     .from("posts")
     .insert({
-      title: null,
       status: "queued",
       schedule_mode: "queue",
       queue_position: (last?.[0]?.queue_position ?? -1) + 1,
@@ -48,7 +47,6 @@ export async function createPost(): Promise<never> {
 export async function updatePost(
   id: string,
   fields: {
-    title?: string | null;
     caption?: string;
     hashtag_placement?: HashtagPlacement;
     status?: PostStatus;
@@ -64,9 +62,8 @@ export async function updatePost(
   // signature, and a mistyped column name should fail here rather than at
   // runtime.
   const patch: Partial<
-    Pick<Post, "title" | "caption" | "hashtag_placement" | "status">
+    Pick<Post, "caption" | "hashtag_placement" | "status">
   > = {};
-  if (fields.title !== undefined) patch.title = fields.title?.trim() || null;
   if (fields.caption !== undefined) patch.caption = fields.caption;
   if (fields.hashtag_placement !== undefined) {
     patch.hashtag_placement = fields.hashtag_placement;

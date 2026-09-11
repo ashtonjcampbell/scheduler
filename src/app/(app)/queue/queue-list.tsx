@@ -9,13 +9,10 @@ import { reorderQueue, setReady } from "./actions";
 
 type Item = {
   id: string;
-  title: string | null;
   caption: string;
   cover: string | null;
   /** When this post will go out, worked out from the timetable. */
   at: string | null;
-  /** In the queue proper. A draft holds its place but is passed over. */
-  ready: boolean;
 };
 
 export function QueueList({
@@ -83,14 +80,11 @@ export function QueueList({
 
   return (
     <section>
-      {/* The running order holds drafts as well, so the heading counts the two
-          apart — "in the queue" now means only what will actually go out. */}
+      {/* Only ready posts reach this list; drafts are planned on the grid. */}
       <h2 className="text-sm font-semibold">
-        Coming up{" "}
+        In the queue{" "}
         <span className="font-normal text-stone-500 dark:text-stone-400">
-          {order.filter((p) => p.ready).length} in the queue
-          {order.some((p) => !p.ready) &&
-            ` · ${order.filter((p) => !p.ready).length} still drafts`}
+          {order.length}
         </span>
       </h2>
 
@@ -119,21 +113,11 @@ export function QueueList({
 
             <Link href={`/posts/${post.id}`} className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
-                {post.title ?? firstLine(post.caption) ?? "Untitled post"}
-                {!post.ready && (
-                  <span className="ml-2 align-middle rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-normal text-stone-600 dark:bg-stone-800 dark:text-stone-400">
-                    draft
-                  </span>
-                )}
+                {firstLine(post.caption) ?? "Untitled post"}
               </p>
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 {post.at ? (
-                  <>
-                    {formatPacific(post.at)}
-                    {/* Says plainly what will happen, rather than leaving a
-                        date standing there like a promise it cannot keep. */}
-                    {!post.ready && " · passed over unless finished by then"}
-                  </>
+                  formatPacific(post.at)
                 ) : (
                   <span className="text-amber-700 dark:text-amber-400">
                     no slot available
@@ -161,11 +145,7 @@ export function QueueList({
               >
                 ↓
               </button>
-              {/* Nothing to take out if it is already a draft — it keeps its
-                  place either way, so the only thing this changes is whether
-                  it may publish. */}
-              {post.ready && (
-                <button
+              <button
                   type="button"
                   onClick={() => drop(post.id)}
                   disabled={pending}
@@ -173,8 +153,7 @@ export function QueueList({
                   className="ml-1 rounded px-1.5 py-0.5 text-xs text-stone-500 hover:text-stone-900 disabled:opacity-50 dark:hover:text-stone-100"
                 >
                   Back to draft
-                </button>
-              )}
+              </button>
             </div>
           </li>
         ))}
