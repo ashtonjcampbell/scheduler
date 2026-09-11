@@ -39,14 +39,14 @@ export type LiveTile = {
  * Dragging therefore reverses before it saves; getting that backwards would
  * quietly turn the schedule upside down.
  *
- * What moves is the POST, not the slot. Each queued tile keeps the time it had
- * — those come from the weekly timetable and belong to the position in the
- * grid, not to whatever is sitting in it. Dragging swaps which post lands on
- * which date, which is the question being asked when someone rearranges a grid.
+ * What moves is the POST, not the slot. Dates belong to positions, not to the
+ * posts sitting in them, so dragging swaps which post lands on which date —
+ * the question anyone rearranging a grid is actually asking.
  *
- * Only queued posts move. A scheduled post is pinned to an exact instant by
- * hand and a published one already happened, so neither is the queue's to
- * shuffle; both stay put and the queued posts rearrange around them.
+ * Dates only ever land on FINISHED posts. A draft holds its place and shows no
+ * date, because the day it goes out is the day it gets finished and nobody
+ * knows when that is. A pinned post and a published one are not the queue's to
+ * shuffle either; both stay put and the rest rearrange around them.
  */
 export function GridBoard({
   planned,
@@ -85,18 +85,16 @@ export function GridBoard({
       const result = await reorderQueue([...next].reverse());
 
       /*
-       * Only re-render the page if the save FAILED.
+       * Re-read either way.
        *
-       * On success there is nothing to fetch: the dates belong to the
-       * positions and stay where they are, so the screen already shows the
-       * result. Refreshing anyway meant every drag paid for a full re-render
-       * of the grid — six queries and a re-layout — on top of the write, which
-       * is how dragging managed to exhaust the request budget.
+       * Dragging can move a post between a dated position and an undated one,
+       * and the dates belong to positions rather than to posts — so without
+       * this a draft would sit there wearing the date of the finished post it
+       * displaced. One read per drop, against one write, is affordable; it was
+       * the old loop of writes that made this too expensive.
        */
-      if (result.error) {
-        setError(result.error);
-        router.refresh();
-      }
+      if (result.error) setError(result.error);
+      router.refresh();
     });
   };
 
@@ -117,8 +115,8 @@ export function GridBoard({
     <div className="space-y-3">
       {queuedIds.length > 1 && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Drag to reorder — drafts included. The dates stay put and the posts
-          move between them.
+          Drag to reorder — drafts included. Finished posts take the dates,
+          in order; drafts get one when you finish them.
         </p>
       )}
 
@@ -187,7 +185,7 @@ export function GridBoard({
                   />
 
                   <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-1 pb-0.5 pt-3 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
-                    {tile.at ? formatPacific(tile.at) : "preview draft"}
+                    {tile.at ? formatPacific(tile.at) : "not scheduled yet"}
                   </span>
                 </Link>
               </div>

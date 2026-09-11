@@ -21,8 +21,9 @@ export const dynamic = "force-dynamic";
  * between them would break the row exactly where the join needs judging,
  * which is the whole point of showing them together.
  *
- * Rough drafts are excluded entirely, per the brief. Preview drafts appear at
- * the top, since they are intended for some point ahead but have no time yet.
+ * Drafts sit at the top with no date. They publish whenever they are finished,
+ * which is later than anything already scheduled and unknowable until then —
+ * so the grid shows the arrangement without inventing a day for it.
  */
 export default async function GridPage() {
   const supabase = await supabaseServer();
@@ -67,17 +68,21 @@ export default async function GridPage() {
   const all = posts ?? [];
 
   /*
-   * The running order is everything holding a POSITION — drafts included.
-   * Keying off the "queued" status instead is what made a draft look queued,
-   * and would now hide drafts from the grid entirely, which is the opposite of
-   * what the grid is for.
+   * Slots go to FINISHED posts only.
+   *
+   * A draft gets no date because there is no honest one to give it: it takes a
+   * slot when it is finished, and nobody knows when that will be. Dating it by
+   * its place in the order produced a number the app could not keep — the grid
+   * promised November for a post that was going out the following Thursday.
    */
   const queued = publishOrder(
-    all.filter((p) => p.queue_position !== null && p.status !== "published"),
+    all.filter(
+      (p) => p.queue_position !== null && p.status !== "published" && p.ready,
+    ),
   );
 
-  // Queued posts carry no time of their own, so the grid works theirs out the
-  // same way the queue page does — one source of truth for "when".
+  // Worked out the same way the queue page and the worker do it — one source
+  // of truth for "when".
   const { assignments } = assignQueue({
     posts: queued,
     slots: slots ?? [],
@@ -108,8 +113,16 @@ export default async function GridPage() {
       photos: countFor(post.id),
     }))
     .sort((a, b) => {
-      // Preview drafts have no time; they sit at the top as "some point ahead".
-      if (!a.at && !b.at) return 0;
+      /*
+       * Newest first, so an undated draft belongs ABOVE everything dated: it
+       * publishes later than anything already scheduled, whenever it is
+       * finished. Between two drafts the arranged order decides, reversed,
+       * because the one meant to go out LAST sits highest.
+       */
+      if (!a.at && !b.at) {
+        return (b.queue_position ?? 0) - (a.queue_position ?? 0);
+      }
+
       if (!a.at) return -1;
       if (!b.at) return 1;
       return b.at.localeCompare(a.at);
@@ -135,20 +148,20 @@ export default async function GridPage() {
           How your profile will look once everything has gone out — newest
           first, the way Instagram shows it, in the 4:5 tiles it now uses. Your
           existing posts carry on in the same grid, so you can see the join.
-          Rough drafts are left out.
+          Unfinished posts sit at the top, dateless until you finish them.
         </p>
       </div>
 
       <p className="text-xs text-stone-500 dark:text-stone-400">
         {upcoming} still to come
-        {notReady > 0 && ` · ${notReady} still a draft`}
+        {notReady > 0 && ` · ${notReady} not scheduled yet`}
         {live.length > 0 && ` · ${live.length} already on @${settings?.ig_username}`}
         {settings?.grid_synced_at && ` · synced ${formatPacific(settings.grid_synced_at)}`}
       </p>
 
       {planned.length === 0 && live.length === 0 ? (
         <p className="rounded-lg border border-dashed border-stone-300 px-4 py-12 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-          Nothing to show yet. Queue a post or mark one as a preview draft.
+          Nothing to show yet. Start a post and it appears here.
         </p>
       ) : (
         <GridBoard
