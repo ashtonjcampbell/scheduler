@@ -143,3 +143,33 @@ export function reorder(
   next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
   return next;
 }
+
+/**
+ * The order posts will actually publish in.
+ *
+ * Queue position is the PLAN. What happens is slightly different: when a slot
+ * comes round and the post whose turn it is has not been finished, the slot
+ * goes to the next one that has been, and the draft waits for the following
+ * slot. So a ready post sitting behind three drafts does not go out in four
+ * weeks — it goes out next.
+ *
+ * Which means dates have to be worked out ready-first, or the app shows a date
+ * it will not keep. The grid said November for a post the queue said was going
+ * out next Thursday; both were computing honestly from different orders, and
+ * only one of them matched what the worker would do.
+ *
+ * Within each group the queue position still decides, so the ordering set by
+ * dragging is preserved — it just applies to the finished posts first.
+ */
+export function publishOrder<
+  T extends { queue_position: number | null; ready: boolean },
+>(posts: readonly T[]): T[] {
+  return [...posts].sort((a, b) => {
+    if (a.ready !== b.ready) return a.ready ? -1 : 1;
+
+    return (
+      (a.queue_position ?? Number.MAX_SAFE_INTEGER) -
+      (b.queue_position ?? Number.MAX_SAFE_INTEGER)
+    );
+  });
+}

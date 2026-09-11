@@ -1,4 +1,4 @@
-import { assignQueue, findMissed, reorder, type Slot } from "../src/lib/queue";
+import { assignQueue, findMissed, publishOrder, reorder, type Slot } from "../src/lib/queue";
 import { formatPacific, inPacific } from "../src/lib/time";
 
 /**
@@ -153,6 +153,44 @@ console.log("\nReordering");
   check("no-op stays put", reorder(ids, 1, 1).join() === "a,b,c,d");
   check("out of range is ignored", reorder(ids, 9, 0).join() === "a,b,c,d");
   check("original is untouched", ids.join() === "a,b,c,d");
+}
+
+// ---------------------------------------------------------------------------
+// Publish order: what the grid and the queue must agree on
+// ---------------------------------------------------------------------------
+
+{
+  const posts = [
+    { id: "draft-a", queue_position: 0, ready: false },
+    { id: "draft-b", queue_position: 1, ready: false },
+    { id: "ready-1", queue_position: 2, ready: true },
+    { id: "draft-c", queue_position: 3, ready: false },
+    { id: "ready-2", queue_position: 4, ready: true },
+  ];
+
+  const order = publishOrder(posts).map((p) => p.id).join();
+
+  /*
+   * A finished post sitting behind three drafts goes out NEXT, not in four
+   * weeks. The worker passes unfinished posts over, so every date the app
+   * shows has to be worked out the same way — the grid once said November for
+   * a post the queue said was going out on Thursday, and the queue was right.
+   */
+  check("finished posts take the next slots", order === "ready-1,ready-2,draft-a,draft-b,draft-c", order);
+
+  const dragged = publishOrder([
+    { id: "b", queue_position: 1, ready: true },
+    { id: "a", queue_position: 0, ready: true },
+  ]).map((p) => p.id).join();
+
+  check("with nothing unfinished it is plain queue order", dragged === "a,b", dragged);
+
+  const drafts = publishOrder([
+    { id: "y", queue_position: 1, ready: false },
+    { id: "x", queue_position: 0, ready: false },
+  ]).map((p) => p.id).join();
+
+  check("dragging still orders the drafts among themselves", drafts === "x,y", drafts);
 }
 
 console.log(failures === 0 ? "\nAll checks passed.\n" : `\n${failures} check(s) failed.\n`);

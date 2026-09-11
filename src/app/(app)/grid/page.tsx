@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { assignQueue } from "@/lib/queue";
+import { assignQueue, publishOrder } from "@/lib/queue";
 import { thumbUrl } from "@/lib/photos";
 import { formatPacific } from "@/lib/time";
 import { GridBoard } from "./grid-board";
@@ -72,13 +72,9 @@ export default async function GridPage() {
    * and would now hide drafts from the grid entirely, which is the opposite of
    * what the grid is for.
    */
-  const queued = all
-    .filter((p) => p.queue_position !== null && p.status !== "published")
-    .sort(
-      (a, b) =>
-        (a.queue_position ?? Number.MAX_SAFE_INTEGER) -
-        (b.queue_position ?? Number.MAX_SAFE_INTEGER),
-    );
+  const queued = publishOrder(
+    all.filter((p) => p.queue_position !== null && p.status !== "published"),
+  );
 
   // Queued posts carry no time of their own, so the grid works theirs out the
   // same way the queue page does — one source of truth for "when".

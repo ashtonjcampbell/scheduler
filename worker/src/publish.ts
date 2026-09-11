@@ -6,7 +6,7 @@ import { syncGrid } from "./sync-grid.js";
 import { syncPerformance } from "./sync-performance.js";
 import { sweepEmptyPosts } from "./sweep-empty-posts.js";
 import { reconcilePublished } from "./reconcile-published.js";
-import { assignQueue } from "../../src/lib/queue";
+import { assignQueue, publishOrder } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
 /**
@@ -139,13 +139,9 @@ async function findDue(): Promise<DuePost[]> {
     .filter((p) => p.status === "scheduled" && p.scheduled_for)
     .map((p) => ({ id: p.id, scheduled_for: p.scheduled_for!, ready: p.ready }));
 
-  const queued = all
-    .filter((p) => p.status === "queued")
-    .sort(
-      (a, b) =>
-        (a.queue_position ?? Number.MAX_SAFE_INTEGER) -
-        (b.queue_position ?? Number.MAX_SAFE_INTEGER),
-    );
+  // Ready first, then queue position — the same order the app shows, so the
+  // date on screen is the date the post actually goes out.
+  const queued = publishOrder(all.filter((p) => p.status === "queued"));
 
   /*
    * Slots are laid out over the queue in order, ready or not — that ordering
@@ -161,9 +157,11 @@ async function findDue(): Promise<DuePost[]> {
   const readyById = new Map(all.map((p) => [p.id, p.ready]));
   const dueSlots = assignments.filter((a) => a.at <= now);
 
+  // Ready posts already sort to the front, so the due slots simply belong to
+  // the assignments at the front — as long as they are ready at all.
   const readyInOrder = assignments
-    .filter((a) => readyById.get(a.postId))
-    .slice(0, dueSlots.length);
+    .slice(0, dueSlots.length)
+    .filter((a) => readyById.get(a.postId));
 
   const due: DuePost[] = [
     // A fixed time is a promise about an instant, so it cannot be handed to a
