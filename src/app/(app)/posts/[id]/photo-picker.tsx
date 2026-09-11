@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Photo, PhotoUsage } from "@/lib/database.types";
 import { thumbUrl, USAGE_LABELS } from "@/lib/photos";
+import { useDragReorder, moveBy } from "@/components/use-drag-reorder";
 
 /** Instagram's Content Publishing API cap, even though the app allows 20. */
 const MAX_CAROUSEL = 10;
@@ -38,14 +39,11 @@ export function PhotoPicker({
 
   const remove = (id: string) => onChange(selected.filter((s) => s !== id));
 
-  const move = (index: number, delta: number) => {
-    const next = [...selected];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
+  const move = (index: number, delta: number) => onChange(moveBy(selected, index, delta));
 
-    [next[index], next[target]] = [next[target]!, next[index]!];
-    onChange(next);
-  };
+  // Carousel order is the order Instagram shows them in, so dragging is the
+  // natural way to set it. The arrows stay for keyboard use.
+  const { dragging, itemProps } = useDragReorder(selected, onChange);
 
   const available = photos.filter((photo) => {
     if (selected.includes(photo.id)) return false;
@@ -81,7 +79,13 @@ export function PhotoPicker({
           {chosen.map((photo, index) => (
             <li
               key={photo.id}
-              className="relative w-24 overflow-hidden rounded border border-stone-200 dark:border-stone-700"
+              {...itemProps(photo.id)}
+              title="Drag to reorder"
+              className={
+                dragging === photo.id
+                  ? "relative w-24 cursor-grabbing overflow-hidden rounded border border-stone-400 opacity-40 dark:border-stone-500"
+                  : "relative w-24 cursor-grab overflow-hidden rounded border border-stone-200 dark:border-stone-700"
+              }
             >
               {thumbUrl(photo) && (
                 // Plain <img> on purpose: this file is already exactly what

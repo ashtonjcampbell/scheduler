@@ -64,11 +64,21 @@ export async function updatePost(
 export async function deletePost(id: string): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
 
-  // A published post is a record of something that actually happened; losing
-  // it would leave the grid preview lying about the account's history.
-  const { data: post } = await supabase.from("posts").select("status").eq("id", id).single();
+  /*
+   * A published post is a record of something that actually happened; losing
+   * it would leave the grid preview lying about the account's history.
+   *
+   * A dry run is the exception. Nothing was sent, nothing exists on Instagram,
+   * and the post is only marked published because the rehearsal went all the
+   * way through — so there is no history to protect, just a test to clear up.
+   */
+  const { data: post } = await supabase
+    .from("posts")
+    .select("status, was_dry_run")
+    .eq("id", id)
+    .single();
 
-  if (post?.status === "published") {
+  if (post?.status === "published" && !post.was_dry_run) {
     return { error: "Published posts cannot be deleted." };
   }
 

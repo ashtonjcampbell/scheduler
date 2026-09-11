@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 import { assignQueue } from "@/lib/queue";
 import { thumbUrl } from "@/lib/photos";
 import { formatPacific } from "@/lib/time";
-import type { PostStatus } from "@/lib/database.types";
+import { GridBoard } from "./grid-board";
 
 export const metadata = { title: "Grid preview" };
 export const dynamic = "force-dynamic";
@@ -144,70 +143,27 @@ export default async function GridPage() {
           Nothing to show yet. Queue a post or mark one as a preview draft.
         </p>
       ) : (
-        <div className="mx-auto max-w-md">
-          <div className="grid grid-cols-3 gap-0.5">
-            {planned.map((tile) => (
-              <Link
-                key={tile.id}
-                href={`/posts/${tile.id}`}
-                title={`${tile.title ?? firstLine(tile.caption) ?? "Untitled"}${tile.at ? ` — ${formatPacific(tile.at)}` : ""}`}
-                className="group relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
-              >
-                {tile.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={tile.cover}
-                    alt=""
-                    loading="lazy"
-                    className={
-                      tile.status === "published"
-                        ? "h-full w-full object-cover"
-                        : "h-full w-full object-cover opacity-70 transition group-hover:opacity-100"
-                    }
-                  />
-                ) : (
-                  <span className="flex h-full items-center justify-center px-2 text-center text-[10px] text-stone-400">
-                    no photo
-                  </span>
-                )}
-
-                {tile.photos > 1 && (
-                  <span className="absolute right-1 top-1 rounded bg-stone-900/70 px-1 text-[9px] font-medium text-white">
-                    ⧉ {tile.photos}
-                  </span>
-                )}
-
-                <StatusDot status={tile.status} dryRun={tile.was_dry_run} />
-
-                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-1 pb-0.5 pt-3 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
-                  {tile.at ? formatPacific(tile.at) : "preview draft"}
-                </span>
-              </Link>
-            ))}
-
-            {/* Already live. Same grid, same flow — no heading, no row break. */}
-            {live.map((item) => (
-              <a
-                key={item.id}
-                href={item.permalink ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                title={item.caption ?? "Already on Instagram"}
-                className="relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
-              >
-                {/* A video has no usable still of its own; its thumbnail is
-                    what the grid shows. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.thumbnail_url ?? item.media_url ?? ""}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-              </a>
-            ))}
-          </div>
-        </div>
+        <GridBoard
+          planned={planned.map((t) => ({
+            id: t.id,
+            title: t.title,
+            caption: t.caption,
+            status: t.status,
+            was_dry_run: t.was_dry_run,
+            at: t.at,
+            cover: t.cover,
+            photos: t.photos,
+          }))}
+          live={live.map((m) => ({
+            id: m.id,
+            permalink: m.permalink,
+            thumbnail_url: m.thumbnail_url,
+            media_url: m.media_url,
+            caption: m.caption,
+            media_type: m.media_type,
+          }))}
+          username={settings?.ig_username ?? null}
+        />
       )}
 
       {live.length === 0 && (
@@ -233,24 +189,6 @@ export default async function GridPage() {
   );
 }
 
-function StatusDot({ status, dryRun }: { status: PostStatus; dryRun: boolean }) {
-  const colour =
-    status === "published"
-      ? dryRun
-        ? "bg-amber-500"
-        : "bg-emerald-500"
-      : status === "preview_draft"
-        ? "bg-stone-400"
-        : "bg-sky-500";
-
-  return (
-    <span
-      className={`absolute left-1 top-1 h-2 w-2 rounded-full ring-1 ring-white/70 ${colour}`}
-      title={dryRun ? "Published in dry run — not really posted" : status}
-    />
-  );
-}
-
 function Legend({ colour, label }: { colour: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
@@ -258,10 +196,4 @@ function Legend({ colour, label }: { colour: string; label: string }) {
       {label}
     </span>
   );
-}
-
-function firstLine(caption: string): string | null {
-  const line = caption.split("\n").find((l) => l.trim().length > 0);
-  if (!line) return null;
-  return line.length > 60 ? `${line.slice(0, 60)}…` : line;
 }

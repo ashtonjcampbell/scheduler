@@ -19,10 +19,13 @@ export function PostHeader({
   post,
   photoCount,
   hasCaption,
+  unsaved = false,
 }: {
   post: Post;
   photoCount: number;
   hasCaption: boolean;
+  /** Edits on screen that are not in the database yet. */
+  unsaved?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -48,7 +51,10 @@ export function PostHeader({
           live
             ? "flex flex-wrap items-center gap-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950"
             : done
-              ? "flex flex-wrap items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950"
+              ? // A rehearsal is not an achievement; green would read as one.
+                post.was_dry_run
+                ? "flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950"
+                : "flex flex-wrap items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950"
               : "flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-stone-100 px-4 py-3 dark:border-stone-700 dark:bg-stone-900"
         }
       >
@@ -56,7 +62,9 @@ export function PostHeader({
           <p className="text-sm font-semibold">
             {done
               ? post.status === "published"
-                ? `Published${post.was_dry_run ? " (dry run)" : ""}`
+                ? post.was_dry_run
+                  ? "Dry run — this was never posted"
+                  : "Published"
                 : "Publishing now"
               : live
                 ? post.status === "queued"
@@ -66,7 +74,9 @@ export function PostHeader({
           </p>
           <p className="text-xs text-stone-600 dark:text-stone-400">
             {done
-              ? post.published_at && formatPacific(post.published_at)
+              ? post.was_dry_run
+                ? `Rehearsed ${post.published_at ? formatPacific(post.published_at) : ""} — nothing was sent to Instagram`
+                : post.published_at && formatPacific(post.published_at)
               : post.status === "scheduled"
                 ? post.scheduled_for && formatPacific(post.scheduled_for)
                 : post.status === "queued"
@@ -88,15 +98,31 @@ export function PostHeader({
           ) : (
             <button
               type="button"
-              disabled={pending || !ready}
+              // The worker publishes what is in the DATABASE. Queueing on top of
+              // unsaved edits would send the previous wording without ever
+              // saying so.
+              disabled={pending || !ready || unsaved}
               onClick={() => run(() => addToQueue(post.id))}
-              title={ready ? undefined : "Add at least one photo first"}
+              title={
+                unsaved
+                  ? "Save your changes first"
+                  : ready
+                    ? undefined
+                    : "Add at least one photo first"
+              }
               className="rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
             >
               Add to queue
             </button>
           ))}
       </div>
+
+      {unsaved && !done && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          You have unsaved changes. Save them first — publishing sends the saved
+          version, not what is on screen.
+        </p>
+      )}
 
       {!live && !done && !ready && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -112,13 +138,21 @@ export function PostHeader({
 
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
 
-      {post.status !== "published" && (
+      {/* A dry-run post published nothing, so there is no record to protect —
+          only a rehearsal to clear away. */}
+      {(post.status !== "published" || post.was_dry_run) && (
         <div className="flex justify-end">
           <button
             type="button"
             disabled={pending}
             onClick={() => {
-              if (confirm("Delete this post? This cannot be undone.")) {
+              if (
+                confirm(
+                  post.was_dry_run
+                    ? "Delete this post? It was a dry run, so nothing was ever posted to Instagram."
+                    : "Delete this post? This cannot be undone.",
+                )
+              ) {
                 startTransition(async () => {
                   const result = await deletePost(post.id);
                   if (result.error) setError(result.error);
@@ -128,7 +162,7 @@ export function PostHeader({
             }}
             className="text-xs text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
           >
-            Delete this post
+            {post.was_dry_run ? "Delete this dry-run post" : "Delete this post"}
           </button>
         </div>
       )}

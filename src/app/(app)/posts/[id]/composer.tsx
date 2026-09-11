@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   Hashtag,
@@ -26,8 +26,37 @@ type LoadedPost = Post & {
   photo_tags: PhotoTag[];
 };
 
-/** Long enough not to fire mid-sentence, short enough to feel automatic. */
-const SAVE_DELAY_MS = 900;
+/**
+ * What a saved post looks like, for comparing against what is on screen.
+ *
+ * Editing used to save itself a moment after you stopped typing, which meant
+ * there was never anything to take back — a sentence you regretted was already
+ * the post. Saving is now deliberate, which is what makes discarding possible.
+ */
+type Snapshot = {
+  title: string;
+  caption: string;
+  placement: HashtagPlacement;
+  photoIds: string[];
+  picked: PickedTag[];
+};
+
+function snapshotOf(post: LoadedPost): Snapshot {
+  return {
+    title: post.title ?? "",
+    caption: post.caption,
+    placement: post.hashtag_placement,
+    photoIds: [...post.post_photos].sort((a, b) => a.position - b.position).map((p) => p.photo_id),
+    picked: [...post.post_hashtags]
+      .sort((a, b) => a.position - b.position)
+      .map((t) => ({ tag: t.tag, hashtagId: t.hashtag_id })),
+  };
+}
+
+/** Order matters for photos and hashtags, so compare in order. */
+function same(a: Snapshot, b: Snapshot): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export function Composer({
   post,
@@ -47,19 +76,16 @@ export function Composer({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [title, setTitle] = useState(post.title ?? "");
-  const [caption, setCaption] = useState(post.caption);
-  const [placement, setPlacement] = useState<HashtagPlacement>(post.hashtag_placement);
-
-  const [photoIds, setPhotoIds] = useState<string[]>(() =>
-    [...post.post_photos].sort((a, b) => a.position - b.position).map((p) => p.photo_id),
+  const [title, setTitle] = useState(() => snapshotOf(post).title);
+  const [caption, setCaption] = useState(() => snapshotOf(post).caption);
+  const [placement, setPlacement] = useState<HashtagPlacement>(
+    () => snapshotOf(post).placement,
   );
+  const [photoIds, setPhotoIds] = useState<string[]>(() => snapshotOf(post).photoIds);
+  const [picked, setPicked] = useState<PickedTag[]>(() => snapshotOf(post).picked);
 
-  const [picked, setPicked] = useState<PickedTag[]>(() =>
-    [...post.post_hashtags]
-      .sort((a, b) => a.position - b.position)
-      .map((t) => ({ tag: t.tag, hashtagId: t.hashtag_id })),
-  );
+  /** The last version written to the database — what "discard" returns to. */
+  const [saved, setSaved] = useState<Snapshot>(() => snapshotOf(post));
 
   const [tagging, setTagging] = useState<Photo | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -88,10 +114,14 @@ export function Composer({
     [caption, appended, placement],
   );
 
-  // --- autosave -----------------------------------------------------------
+  // --- saving ---------------------------------------------------------------
 
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const first = useRef(true);
+  const current: Snapshot = useMemo(
+    () => ({ title, caption, placement, photoIds, picked }),
+    [title, caption, placement, photoIds, picked],
+  );
+
+  const dirty = !same(current, saved);
 
   const save = useCallback(async () => {
     setSaveState("saving");
@@ -110,24 +140,47 @@ export function Composer({
       return;
     }
 
+    setSaved({ title, caption, placement, photoIds, picked });
     setSaveState("saved");
     startTransition(() => router.refresh());
   }, [post.id, title, caption, placement, photoIds, picked, router]);
 
+  const discard = useCallback(() => {
+    setTitle(saved.title);
+    setCaption(saved.caption);
+    setPlacement(saved.placement);
+    setPhotoIds(saved.photoIds);
+    setPicked(saved.picked);
+    setSaveState("idle");
+    setError(null);
+  }, [saved]);
+
+  /*
+   * The browser's own "leave site?" prompt. Crude, and the only thing that
+   * works for a closed tab or a typed URL — without it, deliberate saving
+   * would just be a quieter way to lose an afternoon's writing.
+   */
   useEffect(() => {
-    // Don't save on mount — nothing has changed yet.
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    if (!dirty) return;
 
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save(), SAVE_DELAY_MS);
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
+  // Ctrl/Cmd+S is the reflex for anyone who has ever used a text editor, and
+  // the browser's own save dialog is never what is wanted here.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (dirty) void save();
+      }
     };
-  }, [save]);
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dirty, save]);
 
   const usageById = useMemo(
     () => new Map(usage.map((u) => [u.photo_id, u.usage])),
@@ -156,13 +209,34 @@ export function Composer({
           placeholder="Internal name (never posted)"
           className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-stone-500 dark:border-stone-700 dark:bg-stone-900"
         />
-        <SaveIndicator state={saveState} />
+        <SaveIndicator state={saveState} dirty={dirty} />
+
+        <button
+          type="button"
+          disabled={!dirty || saveState === "saving"}
+          onClick={() => void save()}
+          className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+        >
+          Save
+        </button>
+
+        <button
+          type="button"
+          disabled={!dirty || saveState === "saving"}
+          onClick={() => {
+            if (confirm("Throw away every change since the last save?")) discard();
+          }}
+          className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-stone-700"
+        >
+          Discard
+        </button>
       </div>
 
       <PostHeader
         post={post}
         photoCount={photoIds.length}
         hasCaption={caption.trim().length > 0}
+        unsaved={dirty}
       />
 
       {error && (
@@ -334,25 +408,34 @@ function PreviewPanel({
   );
 }
 
-function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" | "error" }) {
-  const text = {
-    idle: "",
-    saving: "Saving…",
-    saved: "Saved",
-    error: "Not saved",
-  }[state];
+function SaveIndicator({
+  state,
+  dirty,
+}: {
+  state: "idle" | "saving" | "saved" | "error";
+  dirty: boolean;
+}) {
+  if (state === "saving") {
+    return <span className="text-xs text-stone-500 dark:text-stone-400">Saving…</span>;
+  }
 
-  if (!text) return null;
+  if (state === "error") {
+    return <span className="text-xs text-red-600 dark:text-red-400">Not saved</span>;
+  }
 
-  return (
-    <span
-      className={
-        state === "error"
-          ? "text-xs text-red-600 dark:text-red-400"
-          : "text-xs text-stone-500 dark:text-stone-400"
-      }
-    >
-      {text}
-    </span>
-  );
+  // Unsaved beats a stale "Saved": once edited again, the last save is no
+  // longer what this post says.
+  if (dirty) {
+    return (
+      <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+        Unsaved changes
+      </span>
+    );
+  }
+
+  if (state === "saved") {
+    return <span className="text-xs text-stone-500 dark:text-stone-400">Saved</span>;
+  }
+
+  return null;
 }
