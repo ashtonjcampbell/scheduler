@@ -26,13 +26,14 @@ const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`;
  * login dialog refuses with "Invalid Scopes" and the account cannot reconnect
  * at all. So a permission belongs here only once it is enabled on the app in
  * the Meta dashboard — never in anticipation of being enabled.
- * `instagram_manage_insights`, for reading how posts performed, is waiting on
- * exactly that.
  */
 export const REQUIRED_SCOPES = [
   "instagram_basic",
   "instagram_content_publish",
   "instagram_manage_comments",
+  // Reads how posts performed, so the app can say which slots actually earn
+  // their place instead of guessing. Read-only: it cannot change anything.
+  "instagram_manage_insights",
   "pages_show_list",
   "pages_read_engagement",
   "business_management",
