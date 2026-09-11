@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Scheduler">
+  <!--
+    The outline camera glyph, matching the HQ icon this was asked to look like:
+    rounded square, ring, dot. Nothing else.
+
+    No background tile. An icon set ships the glyph on transparent so it takes
+    the colour of whatever it sits on, which is what makes a set look like a
+    set — so the stroke follows the browser's theme instead.
+
+    Strokes are 2.5 on a 32 grid, which is 1.25px at favicon size. Thinner
+    reads as grey fuzz at 16px; thicker starts closing up the gap between the
+    ring and the square.
+  -->
+  <style>
+    .glyph { stroke: #1c1917; fill: none; stroke-width: 2.5; }
+    .dot { fill: #1c1917; }
+
+    @media (prefers-color-scheme: dark) {
+      .glyph { stroke: #fafaf9; }
+      .dot { fill: #fafaf9; }
+    }
+  </style>
+
+  <rect class="glyph" x="4" y="4" width="24" height="24" rx="7" />
+  <circle class="glyph" cx="16" cy="16" r="6" />
+  <circle class="dot" cx="22.6" cy="9.4" r="1.6" />
+</svg>

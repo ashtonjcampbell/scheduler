@@ -6,6 +6,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { normaliseTag, validateTag } from "@/lib/hashtags";
 import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
 import { CAPTION_LIMIT } from "@/lib/caption";
+import { isStillOnInstagram } from "@/lib/instagram-check";
 import type { HashtagPlacement, Post, PostStatus } from "@/lib/database.types";
 
 /** Instagram's Content Publishing API caps a carousel at 10 images. */
@@ -316,5 +317,138 @@ export async function setPhotoTags(
   }
 
   revalidatePath(`/posts/${postId}`);
+  return {};
+}
+
+/**
+ * Copy a post into a fresh draft.
+ *
+ * For redoing something rather than starting over. A published post cannot be
+ * edited — it is a record of what actually went out — so when a post has to go
+ * again, differently, the alternative was retyping the caption and re-picking
+ * ten photos by hand.
+ *
+ * Everything that makes up the post comes along: caption, hashtags in order,
+ * photos in order, where the hashtags go, and the account tags on each photo.
+ * What does NOT come along is anything about its history — it arrives as a
+ * draft at the end of the running order, so the copy cannot inherit a slot or
+ * a published state it has not earned.
+ */
+export async function duplicatePost(id: string): Promise<never | { error: string }> {
+  const supabase = await supabaseServer();
+
+  const { data: source, error: readError } = await supabase
+    .from("posts")
+    .select("caption, hashtag_placement")
+    .eq("id", id)
+    .single();
+
+  if (readError || !source) return { error: readError?.message ?? "That post is gone." };
+
+  const { data: last } = await supabase
+    .from("posts")
+    .select("queue_position")
+    .not("queue_position", "is", null)
+    .order("queue_position", { ascending: false })
+    .limit(1);
+
+  const { data: copy, error: createError } = await supabase
+    .from("posts")
+    .insert({
+      caption: source.caption,
+      hashtag_placement: source.hashtag_placement,
+      status: "preview_draft",
+      schedule_mode: "queue",
+      queue_position: (last?.[0]?.queue_position ?? -1) + 1,
+    })
+    .select("id")
+    .single();
+
+  if (createError || !copy) return { error: createError?.message ?? "Could not copy the post." };
+
+  const [{ data: photos }, { data: tags }, { data: accountTags }] = await Promise.all([
+    supabase.from("post_photos").select("photo_id, position").eq("post_id", id),
+    supabase.from("post_hashtags").select("tag, hashtag_id, position").eq("post_id", id),
+    supabase.from("photo_tags").select("photo_id, username, x, y").eq("post_id", id),
+  ]);
+
+  if (photos?.length) {
+    await supabase.from("post_photos").insert(
+      photos.map((p) => ({ post_id: copy.id, photo_id: p.photo_id, position: p.position })),
+    );
+  }
+
+  if (tags?.length) {
+    await supabase.from("post_hashtags").insert(
+      tags.map((t) => ({
+        post_id: copy.id,
+        tag: t.tag,
+        hashtag_id: t.hashtag_id,
+        position: t.position,
+      })),
+    );
+  }
+
+  if (accountTags?.length) {
+    await supabase.from("photo_tags").insert(
+      accountTags.map((t) => ({
+        post_id: copy.id,
+        photo_id: t.photo_id,
+        username: t.username,
+        x: t.x,
+        y: t.y,
+      })),
+    );
+  }
+
+  revalidatePath("/posts");
+  redirect(`/posts/${copy.id}`);
+}
+
+/**
+ * Forget a published post whose Instagram post no longer exists.
+ *
+ * Published posts are normally undeletable, because the record is the only
+ * proof of what went out and the grid is built on it. But a post deleted on
+ * Instagram inverts that: keeping the record makes the grid claim something
+ * that is not there.
+ *
+ * So this ASKS INSTAGRAM first rather than taking anyone's word for it. If the
+ * media is still live the record stays, whoever clicked.
+ */
+export async function forgetDeletedPost(id: string): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("status, was_dry_run, ig_media_id")
+    .eq("id", id)
+    .single();
+
+  if (!post) return { error: "That post is gone already." };
+
+  if (post.status !== "published" || post.was_dry_run) {
+    return { error: "That post was never published for real — delete it normally." };
+  }
+
+  if (!post.ig_media_id) {
+    return { error: "This post has no Instagram id recorded, so it cannot be checked." };
+  }
+
+  const { stillLive, error: checkError } = await isStillOnInstagram(post.ig_media_id);
+  if (checkError) return { error: checkError };
+
+  if (stillLive) {
+    return {
+      error:
+        "This post is still on Instagram. Delete it there first — otherwise the grid would stop matching your profile.",
+    };
+  }
+
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/posts");
+  revalidatePath("/grid");
   return {};
 }

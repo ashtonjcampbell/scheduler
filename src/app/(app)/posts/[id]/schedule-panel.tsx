@@ -20,6 +20,7 @@ export function SchedulePanel({
   photoCount,
   hasCaption,
   hashtagCount,
+  shapeProblem,
   unsaved,
 }: {
   post: Post;
@@ -27,6 +28,8 @@ export function SchedulePanel({
   hasCaption: boolean;
   /** Includes hashtags typed into the caption, not just picked ones. */
   hashtagCount: number;
+  /** What Instagram would do to these photos, if anything is wrong. */
+  shapeProblem: string | null;
   unsaved: boolean;
 }) {
   const router = useRouter();
@@ -57,7 +60,9 @@ export function SchedulePanel({
       ? "Add at least one photo first"
       : !hasCaption
         ? "Write a caption first"
-        : null;
+        : shapeProblem
+          ? "Fix the photo shapes first"
+          : null;
 
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">

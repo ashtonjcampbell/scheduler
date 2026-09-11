@@ -15,6 +15,7 @@ export function PhotoPicker({
   onChange,
   tagCounts,
   onTag,
+  onCrop,
 }: {
   photos: Photo[];
   usageById: Map<string, PhotoUsage>;
@@ -23,6 +24,8 @@ export function PhotoPicker({
   /** How many accounts are tagged on each photo, for the badge. */
   tagCounts: Map<string, number>;
   onTag: (photo: Photo) => void;
+  /** Opens the same crop editor the media bank uses. */
+  onCrop: (photo: Photo) => void;
 }) {
   const [browsing, setBrowsing] = useState(false);
   const [onlyUnused, setOnlyUnused] = useState(false);
@@ -132,15 +135,29 @@ export function PhotoPicker({
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => onTag(photo)}
-                className="w-full border-t border-stone-200 bg-stone-50 py-0.5 text-[10px] text-stone-600 hover:bg-stone-100 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-400 dark:hover:bg-stone-800"
-              >
-                {tagCounts.get(photo.id)
-                  ? `Tagged ${tagCounts.get(photo.id)}`
-                  : "Tag people"}
-              </button>
+              <div className="flex border-t border-stone-200 dark:border-stone-800">
+                {/* Cropping used to live only in the media bank, which is the
+                    wrong place: the shape a photo needs depends on the post it
+                    is going into, and that is decided here. */}
+                <button
+                  type="button"
+                  onClick={() => onCrop(photo)}
+                  title={photo.crop_aspect ? `Cropped to ${photo.crop_aspect}` : "Not cropped"}
+                  className="flex-1 border-r border-stone-200 bg-stone-50 py-0.5 text-[10px] text-stone-600 hover:bg-stone-100 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-400 dark:hover:bg-stone-800"
+                >
+                  {photo.crop_aspect ?? "Crop"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onTag(photo)}
+                  className="flex-1 bg-stone-50 py-0.5 text-[10px] text-stone-600 hover:bg-stone-100 dark:bg-stone-950 dark:text-stone-400 dark:hover:bg-stone-800"
+                >
+                  {tagCounts.get(photo.id)
+                    ? `Tagged ${tagCounts.get(photo.id)}`
+                    : "Tag"}
+                </button>
+              </div>
             </li>
           ))}
         </ol>

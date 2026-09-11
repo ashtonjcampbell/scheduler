@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Post } from "@/lib/database.types";
 import { formatPacific } from "@/lib/time";
-import { deletePost } from "../actions";
+import { deletePost, duplicatePost, forgetDeletedPost } from "../actions";
 import { setReady } from "../../queue/actions";
 
 /**
@@ -29,6 +29,7 @@ export function PostHeader({
   photoCount,
   hasCaption,
   hashtagCount,
+  shapeProblem,
   unsaved = false,
 }: {
   post: Post;
@@ -36,6 +37,8 @@ export function PostHeader({
   hasCaption: boolean;
   /** Includes hashtags typed into the caption, not just picked ones. */
   hashtagCount: number;
+  /** What Instagram would do to these photos, if anything is wrong. */
+  shapeProblem: string | null;
   /** Edits on screen that are not in the database yet. */
   unsaved?: boolean;
 }) {
@@ -55,14 +58,19 @@ export function PostHeader({
   const done = post.status === "published" || post.status === "publishing";
   const ready = post.ready;
 
-  const complete = photoCount > 0 && hasCaption;
+  const complete = photoCount > 0 && hasCaption && !shapeProblem;
   const blockedBecause = unsaved
     ? "Save your changes first"
     : photoCount === 0
       ? "Add at least one photo first"
       : !hasCaption
         ? "Write a caption first"
-        : null;
+        : // A refusal, not a warning. The cost of getting this wrong is a
+          // published post with every landscape centre-cropped and upscaled,
+          // and it cannot be repaired afterwards — only deleted and redone.
+          shapeProblem
+          ? "Fix the photo shapes first"
+          : null;
 
   return (
     <div className="space-y-2">
@@ -146,6 +154,12 @@ export function PostHeader({
         </div>
       </div>
 
+      {shapeProblem && !done && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <strong>Instagram would reshape this post.</strong> {shapeProblem}
+        </p>
+      )}
+
       {unsaved && !done && (
         <p className="text-xs text-amber-700 dark:text-amber-400">
           You have unsaved changes. Save them first — publishing sends the saved
@@ -169,8 +183,52 @@ export function PostHeader({
 
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
 
-      {/* A dry-run post published nothing, so there is no record to protect —
-          only a rehearsal to clear away. */}
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        {/* Copying is how a published post gets redone. It cannot be edited —
+            it is the record of what went out — so without this the only way
+            to post it again differently was retyping all of it. */}
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const result = await duplicatePost(post.id);
+              if (result?.error) setError(result.error);
+            })
+          }
+          className="text-xs text-stone-500 underline-offset-2 hover:underline disabled:opacity-50 dark:text-stone-400"
+        >
+          Duplicate as a new draft
+        </button>
+
+        {/* Only for a post already deleted on Instagram — the action asks
+            Instagram before believing it. */}
+        {post.status === "published" && !post.was_dry_run && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (
+                !confirm(
+                  "Remove this post from the app? Only do this if you have already deleted it on Instagram — it will be checked.",
+                )
+              ) {
+                return;
+              }
+
+              startTransition(async () => {
+                const result = await forgetDeletedPost(post.id);
+                if (result.error) setError(result.error);
+                else router.push("/posts");
+              });
+            }}
+            className="text-xs text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
+          >
+            Deleted on Instagram — remove the record
+          </button>
+        )}
+      </div>
+
       {(post.status !== "published" || post.was_dry_run) && (
         <div className="flex justify-end">
           <button

@@ -34,7 +34,10 @@ export default async function GridPage() {
         .select(
           "id, caption, status, ready, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
         )
-        .in("status", ["preview_draft", "queued", "scheduled", "publishing", "published"]),
+        .in("status", ["preview_draft", "queued", "scheduled", "publishing", "published"])
+        // A post deleted on Instagram is not on the profile, so it is not in
+        // the mirror of the profile either.
+        .is("removed_from_instagram_at", null),
       supabase.from("schedule_slots").select("*"),
       supabase.from("post_photos").select("post_id, photo_id, position"),
       supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),

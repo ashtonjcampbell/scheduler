@@ -81,6 +81,8 @@ export type Post = {
   ig_media_id: string | null;
   ig_permalink: string | null;
   was_dry_run: boolean;
+  /** Set when the post was found to have been deleted on Instagram. */
+  removed_from_instagram_at: string | null;
 };
 
 export type PostPhoto = {

@@ -5,6 +5,7 @@ import { publish, publishingLimitRemaining, InstagramError } from "./lib/instagr
 import { syncGrid } from "./sync-grid.js";
 import { syncPerformance } from "./sync-performance.js";
 import { sweepEmptyPosts } from "./sweep-empty-posts.js";
+import { reconcilePublished } from "./reconcile-published.js";
 import { assignQueue } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
@@ -69,6 +70,10 @@ async function main() {
 
   // Tidying must never be able to stop a post going out.
   await sweepEmptyPosts().catch(() => {});
+
+  // A post deleted on Instagram has to stop counting as published here, or the
+  // grid shows a tile that is not on the account any more.
+  await reconcilePublished().catch(() => {});
 
   const due = await findDue();
 

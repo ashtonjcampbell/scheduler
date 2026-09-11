@@ -19,6 +19,8 @@ import { HashtagPanel, type PickedTag } from "./hashtag-panel";
 import { SchedulePanel } from "./schedule-panel";
 import { PostHeader } from "./post-header";
 import { TagEditor } from "./tag-editor";
+import { CropEditor } from "../../media/crop-editor";
+import { carouselShape, describeShape } from "@/lib/shape";
 
 type LoadedPost = Post & {
   post_photos: Array<{ id: string; photo_id: string; position: number }>;
@@ -87,6 +89,7 @@ export function Composer({
   const [saved, setSaved] = useState<Snapshot>(() => snapshotOf(post));
 
   const [tagging, setTagging] = useState<Photo | null>(null);
+  const [cropping, setCropping] = useState<Photo | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +196,23 @@ export function Composer({
     return counts;
   }, [post.photo_tags]);
 
+  /*
+   * What Instagram will do to these photos, in the order they are actually in.
+   * Checked here rather than at publish time because this is where it can
+   * still be fixed — by the crop button sitting right next to each photo.
+   */
+  const shape = useMemo(() => {
+    const byId = new Map(libraryPhotos.map((p) => [p.id, p]));
+    return carouselShape(
+      photoIds
+        .map((id) => byId.get(id))
+        .filter((p): p is Photo => !!p)
+        .map((p) => ({ id: p.id, width: p.width, height: p.height })),
+    );
+  }, [photoIds, libraryPhotos]);
+
+  const shapeProblem = describeShape(shape);
+
   const tooManyTags = effectiveTags.length > MAX_HASHTAGS_PER_POST;
   const outsideGuide =
     effectiveTags.length > 0 &&
@@ -233,6 +253,7 @@ export function Composer({
         photoCount={photoIds.length}
         hasCaption={caption.trim().length > 0}
         hashtagCount={effectiveTags.length}
+        shapeProblem={shapeProblem}
         unsaved={dirty}
       />
 
@@ -251,6 +272,7 @@ export function Composer({
             onChange={setPhotoIds}
             tagCounts={tagCounts}
             onTag={setTagging}
+            onCrop={setCropping}
           />
 
           <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
@@ -334,6 +356,7 @@ export function Composer({
             photoCount={photoIds.length}
             hasCaption={caption.trim().length > 0}
             hashtagCount={effectiveTags.length}
+            shapeProblem={shapeProblem}
             unsaved={dirty}
           />
 
@@ -394,6 +417,10 @@ export function Composer({
           )}
         </div>
       </div>
+      {cropping && (
+        <CropEditor photo={cropping} onClose={() => setCropping(null)} />
+      )}
+
       {tagging && (
         <TagEditor
           photo={tagging}
