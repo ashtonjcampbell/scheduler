@@ -121,16 +121,19 @@ export function formatPacific(instant: Date | string | number): string {
   return dateTimeFormatter.format(new Date(instant));
 }
 
+/** Reused rather than rebuilt: constructing one of these is the costly part. */
+const slotTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 /** Render a stored "HH:MM:SS" slot time as "10:00 AM". */
 export function formatSlotTime(localTime: string): string {
   const [hours, minutes] = localTime.split(":").map(Number);
   const reference = new Date(Date.UTC(2000, 0, 1, hours, minutes));
 
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(reference);
+  return slotTimeFormatter.format(reference);
 }
 
 export { timeFormatter };

@@ -12,15 +12,24 @@ import { MediaGrid } from "./media-grid";
 import { AutoRefresh } from "./auto-refresh";
 import { TrashHeader } from "./trash-header";
 
+/**
+ * Photos per page.
+ *
+ * Chosen against a CPU budget, not a layout: Cloudflare gives this runtime ten
+ * milliseconds per request on the free plan, and each card is a fair amount of
+ * markup. Ninety-six of them exceeded it and the page failed outright.
+ */
+const PER_PAGE = 24;
+
 export const metadata = { title: "Media bank" };
 export const dynamic = "force-dynamic";
 
 export default async function MediaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
-  const { filter: raw } = await searchParams;
+  const { filter: raw, page: rawPage } = await searchParams;
   // Defaults to what is free to use. Opening the bank on everything meant
   // scrolling past photos already spoken for to find the ones that are not.
   const filter: MediaFilter = isMediaFilter(raw) ? raw : "available";
@@ -58,11 +67,31 @@ export default async function MediaPage({
   const trashedPhotos = trashed ?? [];
 
   const inTrash = filter === "trash";
-  const visible = inTrash
+  const matching = inTrash
     ? trashedPhotos
     : livePhotos.filter((photo) =>
         matchesFilter(photo, usageById.get(photo.id) ?? "unused", filter),
       );
+
+  /*
+   * Shown a page at a time.
+   *
+   * Not for scrolling comfort — this runs on a budget of ten milliseconds of
+   * CPU per request, and rendering a hundred photo cards in one pass spends it
+   * before the page is finished. The bank failed outright at ninety-six.
+   */
+  const page = Math.max(1, Number(rawPage) || 1);
+  const pageCount = Math.max(1, Math.ceil(matching.length / PER_PAGE));
+  const current = Math.min(page, pageCount);
+  const visible = matching.slice((current - 1) * PER_PAGE, current * PER_PAGE);
+
+  const pageHref = (n: number) => {
+    const query = new URLSearchParams();
+    if (filter !== "available") query.set("filter", filter);
+    if (n > 1) query.set("page", String(n));
+    const suffix = query.toString();
+    return suffix ? `/media?${suffix}` : "/media";
+  };
 
   // While anything is mid-pipeline the page needs to update itself: the work
   // finishes in GitHub Actions, so nothing here would otherwise know.
@@ -126,7 +155,32 @@ export default async function MediaPage({
               : "Nothing matches this filter."}
         </p>
       ) : (
-        <MediaGrid photos={visible} usageById={usageById} inTrash={inTrash} />
+        <>
+          <MediaGrid photos={visible} usageById={usageById} inTrash={inTrash} />
+
+          {pageCount > 1 && (
+            <nav className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+              {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                <Link
+                  key={n}
+                  href={pageHref(n)}
+                  aria-current={n === current ? "page" : undefined}
+                  className={
+                    n === current
+                      ? "rounded-md bg-stone-900 px-2.5 py-1 text-xs font-medium text-white dark:bg-stone-100 dark:text-stone-900"
+                      : "rounded-md border border-stone-300 px-2.5 py-1 text-xs text-stone-600 hover:border-stone-500 dark:border-stone-700 dark:text-stone-400"
+                  }
+                >
+                  {n}
+                </Link>
+              ))}
+
+              <span className="ml-2 text-xs text-stone-400 dark:text-stone-500">
+                {matching.length} photo{matching.length === 1 ? "" : "s"}
+              </span>
+            </nav>
+          )}
+        </>
       )}
     </div>
   );

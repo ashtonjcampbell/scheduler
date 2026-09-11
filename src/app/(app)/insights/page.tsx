@@ -13,6 +13,21 @@ import {
   type Scored,
 } from "@/lib/performance";
 
+/*
+   * Built ONCE, at module load.
+   *
+   * Constructing an Intl.DateTimeFormat is expensive — far more than using
+   * one — and this runs per post. At a hundred posts that was a hundred
+   * formatters built to read a weekday off each, on a runtime with a ten
+   * millisecond CPU budget for the whole request.
+   */
+const WEEKDAY_HOUR = new Intl.DateTimeFormat("en-US", {
+  timeZone: TIMEZONE,
+  weekday: "short",
+  hour: "2-digit",
+  hour12: false,
+});
+
 export const metadata = { title: "When to post" };
 export const dynamic = "force-dynamic";
 
@@ -64,12 +79,7 @@ export default async function InsightsPage({
   const scored = score(all, measure);
 
   const parts = (iso: string) => {
-    const formatted = new Intl.DateTimeFormat("en-US", {
-      timeZone: TIMEZONE,
-      weekday: "short",
-      hour: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(iso));
+    const formatted = WEEKDAY_HOUR.formatToParts(new Date(iso));
 
     return {
       weekday: formatted.find((p) => p.type === "weekday")!.value,

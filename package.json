@@ -18,7 +18,8 @@
     "verify:shuffle": "tsx scripts/verify-shuffle.ts",
     "verify:queue": "tsx scripts/verify-queue.ts",
     "verify:performance": "tsx scripts/verify-performance.ts",
-    "verify:shape": "tsx scripts/verify-shape.ts"
+    "verify:shape": "tsx scripts/verify-shape.ts",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
