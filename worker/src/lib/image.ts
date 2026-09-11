@@ -1,5 +1,7 @@
 import sharp from "sharp";
 import { reinterpretToSrgb, type SourceProfile } from "./colour.js";
+// Shared with the app so the editor opens on exactly the box the worker cut.
+import { autoCrop, type CropAspect } from "../../../src/lib/crop";
 
 /**
  * The colour-managed conversion. This is the reason the app exists, so the
@@ -60,6 +62,8 @@ export interface ProcessedImage {
 }
 
 /** A crop expressed as fractions of the upright image, 0-1. */
+export type { CropAspect };
+
 export interface Crop {
   x: number;
   y: number;
@@ -76,13 +80,32 @@ export async function processForInstagram(
    * cannot simply be handed to Sharp.
    */
   assumeProfile?: SourceProfile | null,
+  /**
+   * Shape to crop to when no explicit crop is given.
+   *
+   * Applied HERE rather than by the caller because the box has to be measured
+   * against the UPRIGHT image, and only this function knows whether EXIF says
+   * the stored dimensions are turned on their side. Working it out from the
+   * stored width and height would silently crop a portrait as though it were
+   * a landscape.
+   */
+  defaultAspect?: CropAspect | null,
 ): Promise<ProcessedImage> {
   const metadata = await sharp(input).metadata();
 
   const sourceColorProfile = describeProfile(metadata.icc);
   const missingColorProfile = !metadata.icc;
 
-  const extract = crop ? toPixels(crop, metadata) : null;
+  const turned = (metadata.orientation ?? 1) >= 5;
+  const uprightWidth = (turned ? metadata.height : metadata.width) ?? 0;
+  const uprightHeight = (turned ? metadata.width : metadata.height) ?? 0;
+
+  // An explicit crop always wins: it is a decision someone made by hand.
+  const effectiveCrop =
+    crop ??
+    (defaultAspect ? autoCrop(uprightWidth, uprightHeight, defaultAspect) : null);
+
+  const extract = effectiveCrop ? toPixels(effectiveCrop, metadata) : null;
 
   // Reinterpreting means the embedded profile is deliberately ignored — the
   // whole point is that the file was mislabelled, or unlabelled.

@@ -1,5 +1,6 @@
 import { serviceClient, log } from "./lib/supabase.js";
-import { processForInstagram, type Crop } from "./lib/image.js";
+import { processForInstagram, type Crop, type CropAspect } from "./lib/image.js";
+import { isCropAspect } from "../../src/lib/crop";
 import type { SourceProfile } from "./lib/colour.js";
 
 /**
@@ -73,6 +74,21 @@ async function main() {
 
     if (!pending || pending.length === 0) break;
 
+    /*
+     * The shape new photos are cut to when nobody has said otherwise.
+     *
+     * Read per batch rather than once at startup so a change in Settings takes
+     * effect on the next run instead of the next deploy.
+     */
+    const { data: settings } = await supabase
+      .from("app_settings")
+      .select("default_crop_aspect")
+      .single();
+
+    const defaultAspect = isCropAspect(settings?.default_crop_aspect)
+      ? settings.default_crop_aspect
+      : null;
+
     // Deliberately sequential. Sharp is memory-hungry and a GitHub runner is
     // small; three 40MP files decoded at once is how a runner gets killed.
     for (const photo of pending) {
@@ -95,6 +111,7 @@ async function main() {
         photo.original_filename,
         crop,
         (photo.assumed_profile as SourceProfile | null) ?? null,
+        defaultAspect,
       );
       if (ok) succeeded++;
       else failed++;
@@ -134,6 +151,7 @@ async function processOne(
   filename: string,
   crop: Crop | null = null,
   assumeProfile: SourceProfile | null = null,
+  defaultAspect: CropAspect | null = null,
 ): Promise<boolean> {
   const supabase = serviceClient();
 
@@ -170,7 +188,7 @@ async function processOne(
     }
 
     const input = Buffer.from(await blob.arrayBuffer());
-    const result = await processForInstagram(input, crop, assumeProfile);
+    const result = await processForInstagram(input, crop, assumeProfile, defaultAspect);
 
     const storagePath = `${id}.jpg`;
     const thumbPath = `thumbs/${id}.jpg`;

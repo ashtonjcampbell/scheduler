@@ -193,6 +193,8 @@ export type AppSettings = {
   performance_synced_at: string | null;
   /** Which saved recipe pre-fills the shuffle on a new post. */
   default_recipe_id: string | null;
+  /** Shape new photos are cropped to on upload. Null leaves them alone. */
+  default_crop_aspect: string | null;
   updated_at: string;
 };
 

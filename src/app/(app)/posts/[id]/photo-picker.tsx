@@ -78,7 +78,7 @@ export function PhotoPicker({
           No photos yet.
         </p>
       ) : (
-        <ol className="mt-3 flex flex-wrap gap-2">
+        <ol className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
           {chosen.map((photo, index) => (
             <li
               key={photo.id}
@@ -86,14 +86,14 @@ export function PhotoPicker({
               title="Drag to reorder"
               className={
                 dragging === photo.id
-                  ? "relative w-24 cursor-grabbing overflow-hidden rounded border border-stone-400 opacity-40 dark:border-stone-500"
-                  : "relative w-24 cursor-grab overflow-hidden rounded border border-stone-200 dark:border-stone-700"
+                  ? "relative cursor-grabbing overflow-hidden rounded border border-stone-400 opacity-40 dark:border-stone-500"
+                  : "relative cursor-grab overflow-hidden rounded border border-stone-200 dark:border-stone-700"
               }
             >
               {photo.status !== "ready" ? (
                 // Cropping sends a photo back through processing. Saying so is
                 // the difference between "working" and "my photo vanished".
-                <span className="flex aspect-square w-full flex-col items-center justify-center gap-1 bg-stone-100 px-1 text-center text-[10px] text-stone-500 dark:bg-stone-950 dark:text-stone-400">
+                <span className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-1 bg-stone-100 px-1 text-center text-[10px] text-stone-500 dark:bg-stone-950 dark:text-stone-400">
                   <span>{photo.status === "failed" ? "failed" : "cropping…"}</span>
                   <span className="text-[9px] opacity-70">refresh shortly</span>
                 </span>
@@ -106,7 +106,10 @@ export function PhotoPicker({
                 <img
                   src={thumbUrl(photo)!}
                   alt={photo.alt_text ?? photo.original_filename}
-                  className="aspect-square w-full object-cover"
+                  // contain, not cover: the tile is the 4:5 frame Instagram
+                  // will use, and a photo that is NOT that shape should look
+                  // wrong here rather than be quietly cropped a second time.
+                  className="aspect-[4/5] w-full bg-stone-100 object-contain dark:bg-stone-950"
                 />
                 )
               )}
