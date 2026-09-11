@@ -232,6 +232,7 @@ export function Composer({
         post={post}
         photoCount={photoIds.length}
         hasCaption={caption.trim().length > 0}
+        hashtagCount={effectiveTags.length}
         unsaved={dirty}
       />
 
@@ -332,6 +333,7 @@ export function Composer({
             post={post}
             photoCount={photoIds.length}
             hasCaption={caption.trim().length > 0}
+            hashtagCount={effectiveTags.length}
             unsaved={dirty}
           />
 

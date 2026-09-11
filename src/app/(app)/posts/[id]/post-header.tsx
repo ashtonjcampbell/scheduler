@@ -28,11 +28,14 @@ export function PostHeader({
   post,
   photoCount,
   hasCaption,
+  hashtagCount,
   unsaved = false,
 }: {
   post: Post;
   photoCount: number;
   hasCaption: boolean;
+  /** Includes hashtags typed into the caption, not just picked ones. */
+  hashtagCount: number;
   /** Edits on screen that are not in the database yet. */
   unsaved?: boolean;
 }) {
@@ -118,7 +121,22 @@ export function PostHeader({
               <button
                 type="button"
                 disabled={pending || !complete || unsaved}
-                onClick={() => run(() => setReady(post.id, true))}
+                onClick={() => {
+                  /*
+                   * A question, not a refusal. Posting without hashtags is a
+                   * legitimate choice; forgetting them is the common one, and
+                   * the difference only shows at the moment of committing —
+                   * which is why this asks here rather than nagging from the
+                   * side of the screen where it would be learned and ignored.
+                   */
+                  if (
+                    hashtagCount === 0 &&
+                    !confirm("This post has no hashtags. Send it anyway?")
+                  ) {
+                    return;
+                  }
+                  run(() => setReady(post.id, true));
+                }}
                 title={blockedBecause ?? undefined}
                 className="rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
               >
@@ -139,6 +157,13 @@ export function PostHeader({
         <p className="text-xs text-stone-500 dark:text-stone-400">
           {blockedBecause} to add this to the queue. It keeps its place in the
           grid meanwhile.
+        </p>
+      )}
+
+      {!done && !ready && !blockedBecause && hashtagCount === 0 && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          No hashtags on this one. It can still go out — you will just be asked
+          to confirm.
         </p>
       )}
 

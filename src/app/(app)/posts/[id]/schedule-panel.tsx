@@ -19,11 +19,14 @@ export function SchedulePanel({
   post,
   photoCount,
   hasCaption,
+  hashtagCount,
   unsaved,
 }: {
   post: Post;
   photoCount: number;
   hasCaption: boolean;
+  /** Includes hashtags typed into the caption, not just picked ones. */
+  hashtagCount: number;
   unsaved: boolean;
 }) {
   const router = useRouter();
@@ -94,12 +97,21 @@ export function SchedulePanel({
                 <button
                   type="button"
                   disabled={pending || !when || blocked !== null}
-                  onClick={() =>
+                  onClick={() => {
+                    // Scheduling publishes, so it gets the same nudge the queue
+                    // button does — both are the moment of committing.
+                    if (
+                      hashtagCount === 0 &&
+                      !confirm("This post has no hashtags. Schedule it anyway?")
+                    ) {
+                      return;
+                    }
+
                     // The picker gives a local wall-clock string with no zone.
                     // It is interpreted as Pacific, because that is the only
                     // timezone this app schedules in.
-                    run(() => scheduleFixed(post.id, pacificToInstant(when)))
-                  }
+                    run(() => scheduleFixed(post.id, pacificToInstant(when)));
+                  }}
                   className="rounded-lg border border-stone-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-stone-700"
                 >
                   Schedule
