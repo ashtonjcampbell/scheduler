@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const SECTIONS = [
-  { href: "/", label: "Overview" },
   { href: "/media", label: "Media" },
   { href: "/posts", label: "Posts" },
   { href: "/queue", label: "Queue" },
@@ -21,10 +20,9 @@ export function NavLinks() {
   return (
     <nav className="flex flex-wrap items-center gap-1">
       {SECTIONS.map((section) => {
-        const active =
-          section.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(section.href);
+        // Every section is a real path now that the overview is gone, so a
+        // prefix match is enough — /posts/<id> should light up Posts.
+        const active = pathname.startsWith(section.href);
 
         return (
           <Link
