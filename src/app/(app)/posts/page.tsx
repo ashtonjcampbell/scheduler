@@ -34,13 +34,21 @@ export default async function PostsPage() {
     await Promise.all([
       supabase
         .from("posts")
-        .select("id, caption, status, scheduled_for, published_at, updated_at")
-        .is("removed_from_instagram_at", null)
+        .select("id, caption, status, scheduled_for, published_at, updated_at, removed_from_instagram_at")
         .order("updated_at", { ascending: false }),
       supabase.from("post_photos").select("post_id, photo_id, position"),
       supabase.from("photos").select("id, storage_path, thumb_path, status").is("deleted_at", null),
       supabase.from("post_hashtags").select("post_id"),
     ]);
+
+  /*
+   * Taken down on Instagram, so no longer part of what is live — but kept and
+   * reachable, because the row still holds the caption, the photo set and the
+   * hashtags of a post that no longer exists anywhere else. Hiding it outright
+   * also hid the one thing it is still good for: duplicating it to try again.
+   */
+  const removed = (posts ?? []).filter((p) => p.removed_from_instagram_at);
+  const live = (posts ?? []).filter((p) => !p.removed_from_instagram_at);
 
   const photoById = new Map((photos ?? []).map((p) => [p.id, p]));
 
@@ -76,13 +84,13 @@ export default async function PostsPage() {
         <NewPostButton />
       </div>
 
-      {(posts ?? []).length === 0 ? (
+      {live.length === 0 ? (
         <p className="rounded-lg border border-dashed border-stone-300 px-4 py-12 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
           No posts yet. Start one and pick photos from the media bank.
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(posts ?? []).map((post) => {
+          {live.map((post) => {
             const linked = [...(photosByPost.get(post.id) ?? [])].sort(
               (a, b) => a.position - b.position,
             );
@@ -136,6 +144,42 @@ export default async function PostsPage() {
             );
           })}
         </ul>
+      )}
+
+      {removed.length > 0 && (
+        <details className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+          <summary className="cursor-pointer text-sm font-medium">
+            Deleted on Instagram{" "}
+            <span className="font-normal text-stone-500 dark:text-stone-400">
+              {removed.length}
+            </span>
+          </summary>
+
+          <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+            These are no longer on your profile, so they are left out of the
+            grid and the list above. Kept because each one still holds the
+            caption, photos and hashtags that went out — open one to duplicate
+            it and try again.
+          </p>
+
+          <ul className="mt-3 space-y-1.5">
+            {removed.map((post) => (
+              <li key={post.id}>
+                <Link
+                  href={`/posts/${post.id}`}
+                  className="flex items-baseline gap-2 text-sm text-stone-700 underline-offset-2 hover:underline dark:text-stone-300"
+                >
+                  <span className="truncate">
+                    {firstLine(post.caption) ?? "Untitled post"}
+                  </span>
+                  <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">
+                    {post.published_at && formatPacific(post.published_at)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
