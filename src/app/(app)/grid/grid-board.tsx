@@ -115,8 +115,9 @@ export function GridBoard({
     <div className="space-y-3">
       {queuedIds.length > 1 && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Drag to reorder — drafts included. Finished posts take the dates,
-          in order; drafts get one when you finish them.
+          Drag to arrange, drafts and finished posts alike — this is the
+          layout. Dates land on finished posts only, in order; a draft gets one
+          when you finish it.
         </p>
       )}
 

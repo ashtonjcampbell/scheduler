@@ -114,18 +114,32 @@ export default async function GridPage() {
     }))
     .sort((a, b) => {
       /*
-       * Newest first, so an undated draft belongs ABOVE everything dated: it
-       * publishes later than anything already scheduled, whenever it is
-       * finished. Between two drafts the arranged order decides, reversed,
-       * because the one meant to go out LAST sits highest.
+       * THE ARRANGEMENT decides this order, not the dates.
+       *
+       * Sorting by date instead sounds right and quietly takes away the point
+       * of the page: undated drafts all pile above everything dated, so a
+       * draft can never be dragged past a finished post — and seeing how a
+       * half-written post would sit next to a finished one is exactly what a
+       * grid preview is for.
+       *
+       * Dates are still only shown on finished posts. The arrangement says
+       * where a tile sits; the date says when it goes out; they are allowed to
+       * disagree, and pretending otherwise is what broke this twice already.
        */
-      if (!a.at && !b.at) {
-        return (b.queue_position ?? 0) - (a.queue_position ?? 0);
+      const aPublished = a.status === "published";
+      const bPublished = b.status === "published";
+
+      // What has actually gone out is history: it sits below the plan, newest
+      // first, and nothing can be dragged into the middle of it.
+      if (aPublished !== bPublished) return aPublished ? 1 : -1;
+
+      if (aPublished && bPublished) {
+        return (b.at ?? "").localeCompare(a.at ?? "");
       }
 
-      if (!a.at) return -1;
-      if (!b.at) return 1;
-      return b.at.localeCompare(a.at);
+      // Highest position at the top, because the grid reads newest first and
+      // the last post in the running order is the last to appear.
+      return (b.queue_position ?? 0) - (a.queue_position ?? 0);
     });
 
   /*
