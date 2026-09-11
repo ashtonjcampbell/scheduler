@@ -223,3 +223,71 @@ export async function deleteCategory(id: string): Promise<{ error?: string }> {
   revalidatePath("/hashtags");
   return {};
 }
+
+// ---------------------------------------------------------------------------
+// The default mix for new posts
+// ---------------------------------------------------------------------------
+
+/**
+ * Remember "how many from which categories" as the starting point for every
+ * new post.
+ *
+ * Kept as a single recipe rather than a growing list, because the ask was for a
+ * default and not for a library of presets. The recipe tables already model
+ * this exactly, so nothing new is invented to store it; `app_settings` just
+ * points at which recipe is the default.
+ */
+export async function saveDefaultMix(
+  counts: Record<string, number>,
+): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  const items = Object.entries(counts)
+    .filter(([, count]) => Number.isFinite(count) && count > 0)
+    .map(([category_id, count]) => ({ category_id, count: Math.floor(count) }));
+
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("default_recipe_id")
+    .single();
+
+  let recipeId = settings?.default_recipe_id ?? null;
+
+  if (!recipeId) {
+    const { data: created, error: createError } = await supabase
+      .from("hashtag_recipes")
+      .insert({ name: "Default" })
+      .select("id")
+      .single();
+
+    if (createError) return { error: createError.message };
+    recipeId = created!.id;
+
+    const { error: linkError } = await supabase
+      .from("app_settings")
+      .update({ default_recipe_id: recipeId })
+      .eq("id", true);
+
+    if (linkError) return { error: linkError.message };
+  }
+
+  // Replace wholesale: the panel always knows the complete intended mix, so
+  // reconciling item by item could only drift from what is on screen.
+  const { error: clearError } = await supabase
+    .from("hashtag_recipe_items")
+    .delete()
+    .eq("recipe_id", recipeId);
+
+  if (clearError) return { error: clearError.message };
+
+  if (items.length > 0) {
+    const { error } = await supabase
+      .from("hashtag_recipe_items")
+      .insert(items.map((item) => ({ ...item, recipe_id: recipeId })));
+
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/posts", "layout");
+  return {};
+}

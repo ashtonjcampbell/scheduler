@@ -65,6 +65,7 @@ export function Composer({
   library,
   categories,
   guide,
+  defaultCounts,
 }: {
   post: LoadedPost;
   libraryPhotos: Photo[];
@@ -72,6 +73,7 @@ export function Composer({
   library: Hashtag[];
   categories: HashtagCategory[];
   guide: { min: number; max: number };
+  defaultCounts: Record<string, number>;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -338,6 +340,7 @@ export function Composer({
             onChange={setPicked}
             inlineTags={inline}
             guide={guide}
+            defaultCounts={defaultCounts}
           />
 
           {tooManyTags && (

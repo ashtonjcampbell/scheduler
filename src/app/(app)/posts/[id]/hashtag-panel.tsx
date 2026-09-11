@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Hashtag, HashtagCategory } from "@/lib/database.types";
 import { drawHashtags, rerollOne, type DrawableTag } from "@/lib/shuffle";
 import { normaliseTag, parseTagBlock, isValidParse, MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
+import { saveDefaultMix } from "../../hashtags/actions";
 
 export type PickedTag = { tag: string; hashtagId: string | null };
 
@@ -19,6 +20,7 @@ export function HashtagPanel({
   onChange,
   inlineTags,
   guide,
+  defaultCounts,
 }: {
   library: Hashtag[];
   categories: HashtagCategory[];
@@ -27,8 +29,18 @@ export function HashtagPanel({
   /** Hashtags typed into the caption body — shown so the count makes sense. */
   inlineTags: string[];
   guide: { min: number; max: number };
+  /** The saved default mix, so a new post opens ready to shuffle. */
+  defaultCounts: Record<string, number>;
 }) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  // Starts at the saved default rather than empty, which is the whole point of
+  // having one — the mix is the same on almost every post.
+  const [counts, setCounts] = useState<Record<string, number>>(defaultCounts);
+  const [savingDefault, startSavingDefault] = useTransition();
+
+  // Held locally as well as passed in: after saving, the prop is stale until
+  // the page reloads, and the button would keep offering to save what it just
+  // saved.
+  const [currentDefault, setCurrentDefault] = useState(defaultCounts);
   const [maxPosts, setMaxPosts] = useState<string>("");
   const [locked, setLocked] = useState<Set<string>>(new Set());
   const [oneOff, setOneOff] = useState("");
@@ -56,6 +68,19 @@ export function HashtagPanel({
     pool.filter((t) => t.active && t.category_id === categoryId).length;
 
   const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+
+  // Compared as normalised pairs so {a:2, b:1} and {b:1, a:2} are the same
+  // mix — key order in an object means nothing.
+  const sameAsDefault = useMemo(() => {
+    const flatten = (mix: Record<string, number>) =>
+      Object.entries(mix)
+        .filter(([, n]) => n > 0)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([id, n]) => `${id}:${n}`)
+        .join(",");
+
+    return flatten(counts) === flatten(currentDefault) && total > 0;
+  }, [counts, currentDefault, total]);
 
   const setCount = (categoryId: string, value: number) => {
     setCounts((prev) => {
@@ -341,6 +366,24 @@ export function HashtagPanel({
         {shortfall && (
           <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{shortfall}</p>
         )}
+
+        <button
+          type="button"
+          disabled={savingDefault || sameAsDefault}
+          onClick={() =>
+            startSavingDefault(async () => {
+              await saveDefaultMix(counts);
+              setCurrentDefault(counts);
+            })
+          }
+          className="mt-2 text-[11px] text-stone-500 underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50 dark:text-stone-400"
+        >
+          {savingDefault
+            ? "Saving…"
+            : sameAsDefault
+              ? "This is your default for new posts"
+              : "Make this the default for new posts"}
+        </button>
 
         <p className="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
           Picked at random from your own library. Lock the ones you want to

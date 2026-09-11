@@ -181,6 +181,8 @@ export type AppSettings = {
   keep_originals_days: number;
   grid_synced_at: string | null;
   performance_synced_at: string | null;
+  /** Which saved recipe pre-fills the shuffle on a new post. */
+  default_recipe_id: string | null;
   updated_at: string;
 };
 

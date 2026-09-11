@@ -44,7 +44,18 @@ export function CropEditor({
   );
 
   const frameRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  /** Which corner is being pulled, or "move" when the whole box is sliding. */
+  type Handle = "move" | "nw" | "ne" | "sw" | "se";
+
+  const drag = useRef<{
+    handle: Handle;
+    startX: number;
+    startY: number;
+    orig: Box;
+  } | null>(null);
+
+  const ratio = ASPECTS.find((a) => a.key === aspectKey)?.ratio ?? null;
 
   const chooseAspect = (key: string) => {
     setAspectKey(key);
@@ -53,16 +64,14 @@ export function CropEditor({
   };
 
   const onPointerDown = useCallback(
-    (event: React.PointerEvent) => {
+    (handle: Handle) => (event: React.PointerEvent) => {
+      // A corner sits on top of the box; without this the box would start
+      // sliding at the same time as the corner resizes.
+      event.stopPropagation();
       event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = {
-        startX: event.clientX,
-        startY: event.clientY,
-        origX: box.x,
-        origY: box.y,
-      };
+      drag.current = { handle, startX: event.clientX, startY: event.clientY, orig: box };
     },
-    [box.x, box.y],
+    [box],
   );
 
   const onPointerMove = useCallback(
@@ -72,21 +81,40 @@ export function CropEditor({
       const rect = frameRef.current.getBoundingClientRect();
       const dx = (event.clientX - drag.current.startX) / rect.width;
       const dy = (event.clientY - drag.current.startY) / rect.height;
+      const { handle, orig } = drag.current;
 
-      setBox((prev) => ({
-        ...prev,
-        // Clamped so the box can never leave the photo — which the database
-        // would reject anyway, but silently snapping is friendlier than an error.
-        x: clamp(drag.current!.origX + dx, 0, 1 - prev.w),
-        y: clamp(drag.current!.origY + dy, 0, 1 - prev.h),
-      }));
+      if (handle === "move") {
+        setBox((prev) => ({
+          ...prev,
+          // Clamped so the box can never leave the photo — which the database
+          // would reject anyway, but silently snapping is friendlier than an error.
+          x: clamp(orig.x + dx, 0, 1 - prev.w),
+          y: clamp(orig.y + dy, 0, 1 - prev.h),
+        }));
+        return;
+      }
+
+      setBox(resize(orig, handle, dx, dy, ratio, imageRatio));
     },
-    [],
+    [ratio, imageRatio],
   );
 
   const onPointerUp = useCallback(() => {
     drag.current = null;
   }, []);
+
+  // Nudging with the keyboard is the only way to place a crop exactly, and the
+  // only way to place one at all without a mouse.
+  const nudge = useCallback(
+    (dx: number, dy: number) => {
+      setBox((prev) => ({
+        ...prev,
+        x: clamp(prev.x + dx, 0, 1 - prev.w),
+        y: clamp(prev.y + dy, 0, 1 - prev.h),
+      }));
+    },
+    [],
+  );
 
   const save = () => {
     setError(null);
@@ -157,10 +185,28 @@ export function CropEditor({
             <img src={original} alt="" className="h-full w-full object-contain opacity-40" />
 
             <div
-              onPointerDown={onPointerDown}
+              onPointerDown={onPointerDown("move")}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              className="absolute cursor-move overflow-hidden border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+              onKeyDown={(event) => {
+                // Shift for a coarse move, otherwise a fraction of a percent —
+                // fine enough to place an edge exactly.
+                const step = event.shiftKey ? 0.02 : 0.002;
+                const moves: Record<string, [number, number]> = {
+                  ArrowLeft: [-step, 0],
+                  ArrowRight: [step, 0],
+                  ArrowUp: [0, -step],
+                  ArrowDown: [0, step],
+                };
+                const move = moves[event.key];
+                if (!move) return;
+                event.preventDefault();
+                nudge(move[0], move[1]);
+              }}
+              tabIndex={0}
+              role="application"
+              aria-label="Crop area. Arrow keys move it; hold shift to move further."
+              className="absolute cursor-move border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] outline-none focus-visible:border-sky-400"
               style={{
                 left: `${box.x * 100}%`,
                 top: `${box.y * 100}%`,
@@ -169,27 +215,66 @@ export function CropEditor({
               }}
             >
               {/* The kept region at full brightness, so the framing reads clearly. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={original}
-                alt=""
-                className="pointer-events-none absolute max-w-none"
-                style={{
-                  width: `${100 / box.w}%`,
-                  height: `${100 / box.h}%`,
-                  left: `${(-box.x / box.w) * 100}%`,
-                  top: `${(-box.y / box.h) * 100}%`,
-                }}
-              />
+              <div className="absolute inset-0 overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={original}
+                  alt=""
+                  className="pointer-events-none absolute max-w-none"
+                  style={{
+                    width: `${100 / box.w}%`,
+                    height: `${100 / box.h}%`,
+                    left: `${(-box.x / box.w) * 100}%`,
+                    top: `${(-box.y / box.h) * 100}%`,
+                  }}
+                />
+              </div>
+
+              {/* Thirds, for placing a horizon or a subject deliberately. */}
+              <div className="pointer-events-none absolute inset-0 opacity-40">
+                <div className="absolute inset-y-0 left-1/3 w-px bg-white" />
+                <div className="absolute inset-y-0 left-2/3 w-px bg-white" />
+                <div className="absolute inset-x-0 top-1/3 h-px bg-white" />
+                <div className="absolute inset-x-0 top-2/3 h-px bg-white" />
+              </div>
+
+              {/* Corners sit half outside the box so they stay grabbable even
+                  when the crop is pushed against the edge of the photo. */}
+              {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+                <span
+                  key={corner}
+                  onPointerDown={onPointerDown(corner)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  className={`absolute h-4 w-4 rounded-full border-2 border-stone-900 bg-white ${
+                    corner === "nw"
+                      ? "-left-2 -top-2 cursor-nwse-resize"
+                      : corner === "ne"
+                        ? "-right-2 -top-2 cursor-nesw-resize"
+                        : corner === "sw"
+                          ? "-bottom-2 -left-2 cursor-nesw-resize"
+                          : "-bottom-2 -right-2 cursor-nwse-resize"
+                  }`}
+                />
+              ))}
             </div>
           </div>
         )}
 
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          Drag to reposition.{" "}
+          Drag inside to move, corners to resize, arrow keys to nudge.{" "}
           {resultingSize && (
             <>
-              Result: {resultingSize.w}×{resultingSize.h}.{" "}
+              Result: <span className="tabular-nums">{resultingSize.w}×{resultingSize.h}</span>
+              {photo.width && photo.height && (
+                <>
+                  {" "}
+                  — <span className="tabular-nums">{Math.round(box.w * 100)}%</span> of the width,
+                  from <span className="tabular-nums">{Math.round(box.x * photo.width)}px</span>,{" "}
+                  <span className="tabular-nums">{Math.round(box.y * photo.height)}px</span>
+                </>
+              )}
+              .{" "}
             </>
           )}
           {aspectKey === "free"
@@ -244,6 +329,83 @@ export function CropEditor({
       </div>
     </div>
   );
+}
+
+type Box = { x: number; y: number; w: number; h: number };
+
+/** Nothing smaller, as a fraction of the image — below this the box is unusable. */
+const MIN_SIZE = 0.08;
+
+/**
+ * Pull a corner.
+ *
+ * The opposite corner is the anchor and does not move, which is what makes
+ * dragging feel like resizing rather than sliding.
+ *
+ * The subtlety is the aspect lock. The crop is stored as fractions of the
+ * image, so a 4:5 crop is only 0.8 in fraction-space when the image itself is
+ * square — on a 3:2 photo the same shape is a different pair of numbers. Width
+ * therefore leads and height is derived through the image's own ratio; doing it
+ * in fraction-space directly quietly produces a crop that is not 4:5 at all.
+ */
+function resize(
+  orig: Box,
+  handle: "nw" | "ne" | "sw" | "se",
+  dx: number,
+  dy: number,
+  ratio: number | null,
+  imageRatio: number,
+): Box {
+  const west = handle === "nw" || handle === "sw";
+  const north = handle === "nw" || handle === "ne";
+
+  // The corner that stays put.
+  const anchorX = west ? orig.x + orig.w : orig.x;
+  const anchorY = north ? orig.y + orig.h : orig.y;
+
+  const availableW = west ? anchorX : 1 - anchorX;
+  const availableH = north ? anchorY : 1 - anchorY;
+
+  /*
+   * Floor these BEFORE anything else. Drag a corner past the opposite one and
+   * the raw width goes negative; carried into the ratio maths it comes back
+   * through a division as a plausible-looking positive, and the crop jumps
+   * somewhere nobody asked for.
+   */
+  let w = Math.max(MIN_SIZE, west ? orig.w - dx : orig.w + dx);
+  let h = Math.max(MIN_SIZE, north ? orig.h - dy : orig.h + dy);
+
+  if (ratio === null) {
+    w = clamp(w, MIN_SIZE, availableW);
+    h = clamp(h, MIN_SIZE, availableH);
+  } else {
+    // Follow whichever direction the pointer moved further, so a diagonal drag
+    // does not fight itself.
+    if (Math.abs(dx) >= Math.abs(dy)) h = (w * imageRatio) / ratio;
+    else w = (h * ratio) / imageRatio;
+
+    /*
+     * Every limit from here is applied as a UNIFORM scale of both sides.
+     * Clamping width and height separately is the obvious way to write this
+     * and it silently breaks the ratio at the extremes — squeeze a 1.91:1 crop
+     * into the corner and a per-side minimum turns it into 1.25:1, which then
+     * gets cropped again by Instagram. Scaling keeps the shape exact.
+     */
+    const grow = Math.max(MIN_SIZE / w, MIN_SIZE / h, 1);
+    w *= grow;
+    h *= grow;
+
+    const shrink = Math.min(availableW / w, availableH / h, 1);
+    w *= shrink;
+    h *= shrink;
+  }
+
+  return {
+    x: west ? anchorX - w : anchorX,
+    y: north ? anchorY - h : anchorY,
+    w,
+    h,
+  };
 }
 
 /** The biggest box of the target ratio that fits inside the image. */

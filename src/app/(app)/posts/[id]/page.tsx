@@ -39,10 +39,24 @@ export default async function ComposePage({
       supabase.from("photo_usage").select("photo_id, usage"),
       supabase.from("hashtags").select("*").order("post_count", { ascending: false, nullsFirst: false }),
       supabase.from("hashtag_categories").select("*").order("name"),
-      supabase.from("app_settings").select("hashtag_min, hashtag_max").single(),
+      supabase.from("app_settings").select("hashtag_min, hashtag_max, default_recipe_id").single(),
     ]);
 
   if (post.error || !post.data) notFound();
+
+  // The saved "how many from which categories", so the shuffle opens set to
+  // it rather than empty. A second round trip because it depends on the first.
+  const defaultRecipeId = settings.data?.default_recipe_id ?? null;
+  const defaultItems = defaultRecipeId
+    ? await supabase
+        .from("hashtag_recipe_items")
+        .select("category_id, count")
+        .eq("recipe_id", defaultRecipeId)
+    : null;
+
+  const defaultCounts = Object.fromEntries(
+    (defaultItems?.data ?? []).map((item) => [item.category_id, item.count]),
+  );
 
   return (
     <div className="space-y-5">
@@ -70,6 +84,7 @@ export default async function ComposePage({
           min: settings.data?.hashtag_min ?? 3,
           max: settings.data?.hashtag_max ?? 10,
         }}
+        defaultCounts={defaultCounts}
       />
     </div>
   );
