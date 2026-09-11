@@ -16,6 +16,12 @@ export const dynamic = "force-dynamic";
  * down to oldest-published — which is what the grid will actually look like,
  * rather than a reading order that never exists.
  *
+ * Posts still to come and posts already live share ONE grid, continuously:
+ * planned tiles fill from the top and the real account picks up wherever they
+ * leave off, mid-row if that is where it falls. Two grids with a heading
+ * between them would break the row exactly where the join needs judging,
+ * which is the whole point of showing them together.
+ *
  * Rough drafts are excluded entirely, per the brief. Preview drafts appear at
  * the top, since they are intended for some point ahead but have no time yet.
  */
@@ -26,7 +32,9 @@ export default async function GridPage() {
     await Promise.all([
       supabase
         .from("posts")
-        .select("id, title, caption, status, scheduled_for, published_at, queue_position, was_dry_run")
+        .select(
+          "id, title, caption, status, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
+        )
         .in("status", ["preview_draft", "queued", "scheduled", "publishing", "published"]),
       supabase.from("schedule_slots").select("*"),
       supabase.from("post_photos").select("post_id, photo_id, position"),
@@ -35,7 +43,7 @@ export default async function GridPage() {
 
   // What is already live on Instagram, so the preview sits above reality
   // rather than floating on its own.
-  const [{ data: liveMedia }, { data: settings }] = await Promise.all([
+  const [{ data: liveMedia, error: mediaError }, { data: settings }] = await Promise.all([
     supabase
       .from("instagram_media")
       .select("*")
@@ -43,6 +51,8 @@ export default async function GridPage() {
       .limit(36),
     supabase.from("app_settings").select("ig_username, grid_synced_at").single(),
   ]);
+
+  const connected = Boolean(settings?.ig_username);
 
   if (error) {
     return (
@@ -85,7 +95,7 @@ export default async function GridPage() {
 
   const countFor = (postId: string) => (links ?? []).filter((l) => l.post_id === postId).length;
 
-  const tiles = all
+  const planned = all
     .map((post) => ({
       ...post,
       at: post.published_at ?? post.scheduled_for ?? queuedTime.get(post.id) ?? null,
@@ -100,8 +110,16 @@ export default async function GridPage() {
       return b.at.localeCompare(a.at);
     });
 
-  const published = tiles.filter((t) => t.status === "published").length;
-  const upcoming = tiles.length - published;
+  /*
+   * Once a post has really published it exists twice: as this app's own record
+   * and as a row pulled back from Instagram. Drop the copy from Instagram, so
+   * the grid keeps the tile that opens the post rather than standing it next
+   * to itself.
+   */
+  const ownIgIds = new Set(all.map((p) => p.ig_media_id).filter(Boolean));
+  const live = (liveMedia ?? []).filter((m) => !ownIgIds.has(m.id));
+
+  const upcoming = planned.filter((t) => t.status !== "published").length;
 
   return (
     <div className="space-y-5">
@@ -109,24 +127,26 @@ export default async function GridPage() {
         <h1 className="text-xl font-semibold tracking-tight">Grid preview</h1>
         <p className="mt-1 max-w-2xl text-sm text-stone-600 dark:text-stone-400">
           How your profile will look once everything has gone out — newest
-          first, the way Instagram shows it, in the 4:5 tiles it now uses.
+          first, the way Instagram shows it, in the 4:5 tiles it now uses. Your
+          existing posts carry on in the same grid, so you can see the join.
           Rough drafts are left out.
         </p>
       </div>
 
       <p className="text-xs text-stone-500 dark:text-stone-400">
-        {upcoming} still to come · {published} published here
-        {(liveMedia ?? []).length > 0 && ` · ${(liveMedia ?? []).length} already on @${settings?.ig_username}`}
+        {upcoming} still to come
+        {live.length > 0 && ` · ${live.length} already on @${settings?.ig_username}`}
+        {settings?.grid_synced_at && ` · synced ${formatPacific(settings.grid_synced_at)}`}
       </p>
 
-      {tiles.length === 0 ? (
+      {planned.length === 0 && live.length === 0 ? (
         <p className="rounded-lg border border-dashed border-stone-300 px-4 py-12 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
           Nothing to show yet. Queue a post or mark one as a preview draft.
         </p>
       ) : (
         <div className="mx-auto max-w-md">
           <div className="grid grid-cols-3 gap-0.5">
-            {tiles.map((tile) => (
+            {planned.map((tile) => (
               <Link
                 key={tile.id}
                 href={`/posts/${tile.id}`}
@@ -164,29 +184,15 @@ export default async function GridPage() {
                 </span>
               </Link>
             ))}
-          </div>
-        </div>
-      )}
 
-      {(liveMedia ?? []).length > 0 ? (
-        <section className="mx-auto max-w-md">
-          <div className="flex items-baseline justify-between gap-2 border-t border-stone-200 pt-4 dark:border-stone-800">
-            <h2 className="text-sm font-semibold">Already on Instagram</h2>
-            {settings?.grid_synced_at && (
-              <span className="text-[11px] text-stone-400 dark:text-stone-500">
-                synced {formatPacific(settings.grid_synced_at)}
-              </span>
-            )}
-          </div>
-
-          <div className="mt-2 grid grid-cols-3 gap-0.5">
-            {(liveMedia ?? []).map((item) => (
+            {/* Already live. Same grid, same flow — no heading, no row break. */}
+            {live.map((item) => (
               <a
                 key={item.id}
                 href={item.permalink ?? "#"}
                 target="_blank"
                 rel="noreferrer"
-                title={item.caption ?? undefined}
+                title={item.caption ?? "Already on Instagram"}
                 className="relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
               >
                 {/* A video has no usable still of its own; its thumbnail is
@@ -201,12 +207,16 @@ export default async function GridPage() {
               </a>
             ))}
           </div>
-        </section>
-      ) : (
-        <p className="mx-auto max-w-md border-t border-stone-200 pt-4 text-center text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
-          Connect Instagram in Settings to see your existing posts here, below
-          the ones still to come. Reading your grid works whether or not dry run
-          is on.
+        </div>
+      )}
+
+      {live.length === 0 && (
+        <p className="mx-auto max-w-md text-center text-xs text-stone-500 dark:text-stone-400">
+          {mediaError
+            ? `Could not read the cached grid: ${mediaError.message}`
+            : connected
+              ? `Connected as @${settings?.ig_username}. Your existing posts join this grid after the next publishing run — at most 15 minutes. Reading your grid works whether or not dry run is on.`
+              : "Connect Instagram in Settings and your existing posts will carry on in this grid, below the ones still to come. Reading your grid works whether or not dry run is on."}
         </p>
       )}
 
@@ -214,6 +224,10 @@ export default async function GridPage() {
         <Legend colour="bg-emerald-500" label="Published" />
         <Legend colour="bg-sky-500" label="Scheduled or queued" />
         <Legend colour="bg-stone-400" label="Preview draft" />
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full border border-stone-400" />
+          No dot — already on Instagram
+        </span>
       </div>
     </div>
   );

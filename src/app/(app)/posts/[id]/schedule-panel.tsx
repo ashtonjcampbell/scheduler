@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Post } from "@/lib/database.types";
 import { formatPacific, TIMEZONE } from "@/lib/time";
+import { DateTimePicker } from "./date-time-picker";
 import {
   addToQueue,
   removeFromQueue,
@@ -97,12 +98,7 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
               </p>
 
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <input
-                  type="datetime-local"
-                  value={when}
-                  onChange={(event) => setWhen(event.target.value)}
-                  className="rounded-lg border border-stone-300 bg-white px-2 py-1 text-xs dark:border-stone-700 dark:bg-stone-950"
-                />
+                <DateTimePicker value={when} onChange={setWhen} disabled={pending} />
                 <button
                   type="button"
                   disabled={pending || !when || !ready}
