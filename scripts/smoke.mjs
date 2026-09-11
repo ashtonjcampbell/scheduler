@@ -56,8 +56,6 @@ const PAGES = [
   "/posts",
   "/queue",
   "/grid",
-  "/insights",
-  "/insights?measure=like_count",
   "/ideas",
   "/hashtags",
   "/settings",

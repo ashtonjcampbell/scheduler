@@ -8,7 +8,6 @@ const SECTIONS = [
   { href: "/posts", label: "Posts" },
   { href: "/queue", label: "Queue" },
   { href: "/grid", label: "Grid" },
-  { href: "/insights", label: "When to post" },
   { href: "/ideas", label: "Ideas" },
   { href: "/hashtags", label: "Hashtags" },
   { href: "/settings", label: "Settings" },
