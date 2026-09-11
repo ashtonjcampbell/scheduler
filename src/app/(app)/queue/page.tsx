@@ -16,7 +16,7 @@ export default async function QueuePage() {
       supabase.from("schedule_slots").select("*"),
       supabase
         .from("posts")
-        .select("id, title, caption, status, scheduled_for, queue_position, schedule_mode")
+        .select("id, title, caption, status, ready, scheduled_for, queue_position, schedule_mode")
         .in("status", ["queued", "scheduled", "publishing"]),
       supabase.from("post_photos").select("post_id, photo_id, position"),
       supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
@@ -111,6 +111,7 @@ export default async function QueuePage() {
           caption: post.caption,
           cover: coverFor.get(post.id) ?? null,
           at: timeFor.get(post.id)?.toISOString() ?? null,
+          ready: post.ready,
         }))}
         unassigned={unassigned}
       />

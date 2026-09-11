@@ -5,20 +5,15 @@ import { useRouter } from "next/navigation";
 import type { Post } from "@/lib/database.types";
 import { formatPacific, TIMEZONE } from "@/lib/time";
 import { DateTimePicker } from "./date-time-picker";
-import {
-  addToQueue,
-  removeFromQueue,
-  scheduleFixed,
-  setDraftState,
-} from "../../queue/actions";
+import { scheduleFixed, setDraftState } from "../../queue/actions";
 
 /**
- * What happens to this post, and when.
+ * The exceptions to the rolling queue.
  *
- * The three draft states are not decoration: a rough draft is invisible in the
- * grid preview, a preview draft shows in position but can never publish, and
- * an idea is a thought that is not a post yet. Being explicit about which is
- * what stops a half-finished post drifting toward a slot.
+ * Whether a post publishes at all is decided in the banner above, by the one
+ * button that says so. What is left here is the two things that are genuinely
+ * separate decisions: pinning a post to an exact instant instead of taking its
+ * turn, and setting one aside as not a post yet.
  */
 export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: number }) {
   const router = useRouter();
@@ -63,35 +58,10 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
           )}
 
           <div className="mt-3 space-y-3">
+            {/* No queue button here. It lives in the banner at the top, where
+                the decision is actually made — two of them, in two places,
+                was how "in the queue" stopped meaning anything. */}
             <div>
-              <p className="text-xs font-medium">Rolling queue</p>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                Takes the next free slot. Moves forward on its own if a slot is
-                ever missed.
-              </p>
-
-              {post.status === "queued" ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => removeFromQueue(post.id))}
-                  className="mt-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-stone-700"
-                >
-                  Take out of the queue
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={pending || !ready}
-                  onClick={() => run(() => addToQueue(post.id))}
-                  className="mt-1.5 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900"
-                >
-                  Add to queue
-                </button>
-              )}
-            </div>
-
-            <div className="border-t border-stone-200 pt-3 dark:border-stone-800">
               <p className="text-xs font-medium">Or pin an exact time</p>
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 For anything genuinely time-sensitive. The queue works around it.
@@ -118,31 +88,24 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
               </p>
             </div>
 
+            {/* Draft is no longer a button: it is simply a post not in the
+                queue, which the banner above already controls. What remains is
+                taking a post OUT of the running order entirely. */}
             <div className="border-t border-stone-200 pt-3 dark:border-stone-800">
-              <p className="text-xs font-medium">Or keep it as a draft</p>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {(
-                  [
-                    ["preview_draft", "Draft", "Shows in the grid, never publishes"],
-                    ["idea", "Idea", "Not a real post yet"],
-                  ] as const
-                ).map(([value, label, hint]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    title={hint}
-                    disabled={pending}
-                    onClick={() => run(() => setDraftState(post.id, value))}
-                    className={
-                      post.status === value
-                        ? "rounded-md bg-stone-900 px-2.5 py-1 text-xs font-medium text-white dark:bg-stone-100 dark:text-stone-900"
-                        : "rounded-md border border-stone-300 px-2.5 py-1 text-xs disabled:opacity-50 dark:border-stone-700"
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs font-medium">Or set it aside</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Moves it to Ideas and out of the grid — for something that is
+                not a post yet.
+              </p>
+
+              <button
+                type="button"
+                disabled={pending || post.status === "idea"}
+                onClick={() => run(() => setDraftState(post.id, "idea"))}
+                className="mt-1.5 rounded-md border border-stone-300 px-2.5 py-1 text-xs disabled:opacity-50 dark:border-stone-700"
+              >
+                {post.status === "idea" ? "Already an idea" : "Move to ideas"}
+              </button>
             </div>
           </div>
         </>

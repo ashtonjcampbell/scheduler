@@ -194,6 +194,35 @@ export async function setReady(
 ): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
 
+  // Being in the plan is not the same as being in the queue, but a post has
+  // to be somewhere in the order before it can take a turn. Anything without a
+  // place gets one at the end.
+  if (ready) {
+    const { data: existing } = await supabase
+      .from("posts")
+      .select("queue_position, status")
+      .eq("id", postId)
+      .single();
+
+    if (existing && existing.queue_position === null && existing.status !== "scheduled") {
+      const { data: last } = await supabase
+        .from("posts")
+        .select("queue_position")
+        .not("queue_position", "is", null)
+        .order("queue_position", { ascending: false })
+        .limit(1);
+
+      await supabase
+        .from("posts")
+        .update({
+          status: "queued",
+          schedule_mode: "queue",
+          queue_position: (last?.[0]?.queue_position ?? -1) + 1,
+        })
+        .eq("id", postId);
+    }
+  }
+
   if (ready) {
     const { data: post } = await supabase
       .from("posts")

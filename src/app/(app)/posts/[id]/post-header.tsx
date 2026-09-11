@@ -5,24 +5,24 @@ import { useRouter } from "next/navigation";
 import type { Post } from "@/lib/database.types";
 import { formatPacific } from "@/lib/time";
 import { deletePost } from "../actions";
-import { addToQueue, removeFromQueue, setReady } from "../../queue/actions";
+import { setReady } from "../../queue/actions";
 
 /**
  * The one place that answers "will this go out, and when".
  *
- * Two separate questions, deliberately shown as two separate controls:
+ * ONE button, because there is one decision: this post is finished, let it go
+ * out. It reads "Add to queue", which is what everyone already calls that.
  *
- *   IN THE QUEUE says WHERE this post sits — which slot it is lined up for.
- *   An unfinished post can hold its place for weeks, and seeing it there in
- *   the grid is the whole reason for planning ahead.
+ * There WAS a second button. Every post needs a place in the running order so
+ * the grid can show it at the date it is meant for, and that placement was
+ * exposed as its own control — which meant learning that a post could be "in
+ * the queue" and still not publish. Two buttons, one of which did nothing you
+ * could see. The placement now happens on its own: a post joins the plan when
+ * it is created and can be dragged around the grid like anything else.
  *
- *   PUBLISH-READY says WHETHER it may actually go out from that place. When a
- *   slot arrives and the post at the front is not ready, the slot goes to the
- *   next one that is, and the draft keeps its place for the following slot.
- *
- * Collapsing the two into one status is what made an unfinished post
- * unplaceable before. Keeping them apart means nothing publishes by drifting
- * into a slot — it has to be declared finished, once, on purpose.
+ * So "in the queue" means what it sounds like: this will publish at its turn.
+ * A draft still holds its place and still shows in the grid — it is simply
+ * passed over when its slot arrives, and the next queued post goes instead.
  */
 export function PostHeader({
   post,
@@ -49,7 +49,6 @@ export function PostHeader({
     });
   };
 
-  const placed = post.status === "queued" || post.status === "scheduled";
   const done = post.status === "published" || post.status === "publishing";
   const ready = post.ready;
 
@@ -86,14 +85,10 @@ export function PostHeader({
                     : "Published"
                   : "Publishing now"
                 : ready
-                  ? placed
-                    ? post.status === "scheduled"
-                      ? "Ready — going out at its pinned time"
-                      : "Ready — goes out at its turn in the queue"
-                    : "Ready — but not in the queue, so it has no turn yet"
-                  : placed
-                    ? "Draft — holding its place, will not publish"
-                    : "Draft — not in the queue"}
+                  ? post.status === "scheduled"
+                    ? "In the queue — going out at its pinned time"
+                    : "In the queue — this will publish"
+                  : "Draft — this will not publish"}
             </p>
 
             <p className="text-xs text-stone-600 dark:text-stone-400">
@@ -104,60 +99,32 @@ export function PostHeader({
                 : post.status === "scheduled"
                   ? post.scheduled_for && formatPacific(post.scheduled_for)
                   : ready
-                    ? placed
-                      ? "Takes the next free slot — see the Queue for exactly when"
-                      : "Add it to the queue to give it a slot."
-                    : placed
-                      ? "When its slot comes round it will be passed over, and the next ready post goes out instead."
-                      : "Edit freely. Nothing goes out until you mark it ready."}
+                    ? "Takes the next free slot — see the Queue for exactly when"
+                    : "It keeps its place in the grid. When that slot comes round it is passed over, and the next queued post goes instead."}
             </p>
           </div>
 
-          {!done && (
-            <div className="flex flex-wrap items-center gap-2">
-              {placed ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => removeFromQueue(post.id))}
-                  className="rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-stone-600 dark:bg-stone-900"
-                >
-                  Remove from queue
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={pending || unsaved}
-                  onClick={() => run(() => addToQueue(post.id))}
-                  title={unsaved ? "Save your changes first" : undefined}
-                  className="rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm disabled:opacity-40 dark:border-stone-600 dark:bg-stone-900"
-                >
-                  Add to queue
-                </button>
-              )}
-
-              {ready ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => setReady(post.id, false))}
-                  className="rounded-lg border border-stone-400 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-stone-600 dark:bg-stone-900"
-                >
-                  Back to draft
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={pending || !complete || unsaved}
-                  onClick={() => run(() => setReady(post.id, true))}
-                  title={blockedBecause ?? undefined}
-                  className="rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
-                >
-                  Mark publish-ready
-                </button>
-              )}
-            </div>
-          )}
+          {!done &&
+            (ready ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => setReady(post.id, false))}
+                className="rounded-lg border border-stone-400 bg-white px-4 py-2 text-sm disabled:opacity-50 dark:border-stone-600 dark:bg-stone-900"
+              >
+                Take out of the queue
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={pending || !complete || unsaved}
+                onClick={() => run(() => setReady(post.id, true))}
+                title={blockedBecause ?? undefined}
+                className="rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+              >
+                Add to queue
+              </button>
+            ))}
         </div>
       </div>
 
@@ -170,8 +137,8 @@ export function PostHeader({
 
       {!done && !ready && !unsaved && blockedBecause && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          {blockedBecause} to mark this publish-ready. It can sit in the queue
-          meanwhile.
+          {blockedBecause} to add this to the queue. It keeps its place in the
+          grid meanwhile.
         </p>
       )}
 

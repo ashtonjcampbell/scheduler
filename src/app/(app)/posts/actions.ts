@@ -14,9 +14,29 @@ const MAX_CAROUSEL = 10;
 export async function createPost(): Promise<never> {
   const supabase = await supabaseServer();
 
+  /*
+   * A new post joins the plan straight away, at the end.
+   *
+   * It is a draft, so it cannot publish — but it has a place, a projected date
+   * and a tile in the grid from the moment it exists. That is what makes the
+   * grid usable for deciding what comes next, rather than a view of only the
+   * things already finished.
+   */
+  const { data: last } = await supabase
+    .from("posts")
+    .select("queue_position")
+    .not("queue_position", "is", null)
+    .order("queue_position", { ascending: false })
+    .limit(1);
+
   const { data, error } = await supabase
     .from("posts")
-    .insert({ title: null })
+    .insert({
+      title: null,
+      status: "queued",
+      schedule_mode: "queue",
+      queue_position: (last?.[0]?.queue_position ?? -1) + 1,
+    })
     .select("id")
     .single();
 
