@@ -19,7 +19,7 @@ export default async function QueuePage() {
         .select("id, caption, status, ready, scheduled_for, queue_position, schedule_mode")
         .in("status", ["queued", "scheduled", "publishing"]),
       supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
+      supabase.from("photos").select("id, storage_path, thumb_path, processed_at").is("deleted_at", null),
     ]);
 
   if (error) {

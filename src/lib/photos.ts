@@ -32,9 +32,17 @@ export const TRASH_RETENTION_DAYS = 30;
  * is handed a URL and fetches the image itself, rather than accepting an
  * upload. Paths are UUIDs, so files are unguessable, but treat them as public.
  */
-export function photoUrl(storagePath: string): string {
+export function photoUrl(storagePath: string, version?: string | null): string {
   const { NEXT_PUBLIC_SUPABASE_URL } = publicEnv();
-  return `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${storagePath}`;
+  const url = `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${storagePath}`;
+
+  /*
+   * A reprocessed photo is written back to the SAME path, so without this the
+   * URL is byte-identical and every cache between here and the screen keeps
+   * serving the old picture. Cropping a photo appeared to do nothing at all —
+   * the file was right, the pixels on screen were stale.
+   */
+  return version ? `${url}?v=${encodeURIComponent(version)}` : url;
 }
 
 /**
@@ -51,9 +59,11 @@ export function photoUrl(storagePath: string): string {
 export function thumbUrl(photo: {
   thumb_path: string | null;
   storage_path: string | null;
+  /** Changes on every reprocess, which is exactly what busts the cache. */
+  processed_at?: string | null;
 }): string | null {
   const path = photo.thumb_path ?? photo.storage_path;
-  return path ? photoUrl(path) : null;
+  return path ? photoUrl(path, photo.processed_at) : null;
 }
 
 /** Storage path for a freshly uploaded original. */

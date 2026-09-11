@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requestProcessing } from "./actions";
+import { autoCrop, type CropAspect } from "@/lib/crop";
 
 export type CropInput = {
   x: number;
@@ -136,4 +137,74 @@ export async function setAssumedProfile(
   return {
     message: dispatch.started ? "Re-reading the colour — about half a minute." : dispatch.message,
   };
+}
+
+/**
+ * Crop every uncropped photo on a post to one shape.
+ *
+ * The shape guard refuses a carousel whose photos disagree, and fixing ten
+ * photos one at a time to say the same thing each time is the sort of work a
+ * tool should do for you.
+ *
+ * ONLY photos that have never been cropped. Their delivered file is the whole
+ * original, just resized, so its aspect ratio is the original's — which is
+ * what makes the crop box calculable from the numbers to hand. A photo that
+ * has already been cropped is a decision someone made, and recalculating from
+ * its cropped dimensions would measure against the wrong picture entirely.
+ */
+export async function cropUncroppedTo(
+  postId: string,
+  aspect: CropAspect,
+): Promise<{ error?: string; cropped?: number; skipped?: number }> {
+  const supabase = await supabaseServer();
+
+  const { data: links } = await supabase
+    .from("post_photos")
+    .select("photo_id")
+    .eq("post_id", postId);
+
+  const ids = (links ?? []).map((l) => l.photo_id);
+  if (ids.length === 0) return { cropped: 0, skipped: 0 };
+
+  const { data: photos, error } = await supabase
+    .from("photos")
+    .select("id, width, height, crop_w, crop_aspect, upload_path, original_removed_at")
+    .in("id", ids);
+
+  if (error) return { error: error.message };
+
+  let cropped = 0;
+  let skipped = 0;
+
+  for (const photo of photos ?? []) {
+    if (photo.crop_aspect === aspect) continue;
+
+    // Already framed by hand, or no original left to re-cut from.
+    if (photo.crop_w !== null || !photo.upload_path || photo.original_removed_at) {
+      skipped++;
+      continue;
+    }
+
+    if (!photo.width || !photo.height) {
+      skipped++;
+      continue;
+    }
+
+    const box = autoCrop(photo.width, photo.height, aspect);
+
+    // Already the right shape: record the choice without re-running the file.
+    if (!box) {
+      await supabase.from("photos").update({ crop_aspect: aspect }).eq("id", photo.id);
+      cropped++;
+      continue;
+    }
+
+    const result = await setCrop(photo.id, { ...box, aspect });
+    if (result.error) skipped++;
+    else cropped++;
+  }
+
+  revalidatePath(`/posts/${postId}`);
+  revalidatePath("/media");
+  return { cropped, skipped };
 }

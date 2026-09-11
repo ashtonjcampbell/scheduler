@@ -40,7 +40,7 @@ export default async function GridPage() {
         .is("removed_from_instagram_at", null),
       supabase.from("schedule_slots").select("*"),
       supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
+      supabase.from("photos").select("id, storage_path, thumb_path, processed_at").is("deleted_at", null),
     ]);
 
   // What is already live on Instagram, so the preview sits above reality

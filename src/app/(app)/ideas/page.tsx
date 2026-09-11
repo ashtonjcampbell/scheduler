@@ -17,7 +17,7 @@ export default async function IdeasPage() {
         .eq("status", "idea")
         .order("created_at", { ascending: false }),
       supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, thumb_path").is("deleted_at", null),
+      supabase.from("photos").select("id, storage_path, thumb_path, processed_at").is("deleted_at", null),
       supabase.from("notes").select("*").order("updated_at", { ascending: false }),
     ]);
 

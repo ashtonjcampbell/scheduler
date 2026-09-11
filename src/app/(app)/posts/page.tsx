@@ -37,7 +37,7 @@ export default async function PostsPage() {
         .select("id, caption, status, scheduled_for, published_at, updated_at, removed_from_instagram_at")
         .order("updated_at", { ascending: false }),
       supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, thumb_path, status").is("deleted_at", null),
+      supabase.from("photos").select("id, storage_path, thumb_path, status, processed_at").is("deleted_at", null),
       supabase.from("post_hashtags").select("post_id"),
     ]);
 
