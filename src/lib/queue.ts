@@ -20,6 +20,13 @@ export type Slot = {
 export type QueuedPost = {
   id: string;
   queue_position: number | null;
+  /**
+   * Finished and allowed to publish.
+   *
+   * Optional, and treated as true when absent, so a caller that has already
+   * filtered to finished posts needs to say nothing.
+   */
+  ready?: boolean;
 };
 
 /** A post pinned to an exact time, which the queue must flow around. */
@@ -79,11 +86,18 @@ export function assignQueue({
     (entry) => !blocked.some((taken) => Math.abs(taken - entry.at.getTime()) < window),
   );
 
-  // Queue order is the user's stated intent; nulls sort last so a post that
-  // somehow lost its position does not jump the line.
-  const ordered = [...posts].sort(
-    (a, b) => (a.queue_position ?? Number.MAX_SAFE_INTEGER) - (b.queue_position ?? Number.MAX_SAFE_INTEGER),
-  );
+  /*
+   * Ready first, then queue order.
+   *
+   * Sorted HERE rather than trusted from the caller. It used to sort by queue
+   * position alone, which silently undid a caller that had already ordered its
+   * posts — the grid passed a correctly ordered list, had it thrown away, and
+   * dated a post two months late while the queue page showed the truth.
+   *
+   * Nulls sort last so a post that somehow lost its position cannot jump the
+   * line.
+   */
+  const ordered = publishOrder(posts);
 
   const assignments: Assignment[] = [];
   const unassigned: string[] = [];
@@ -162,10 +176,15 @@ export function reorder(
  * dragging is preserved — it just applies to the finished posts first.
  */
 export function publishOrder<
-  T extends { queue_position: number | null; ready: boolean },
+  T extends { queue_position: number | null; ready?: boolean },
 >(posts: readonly T[]): T[] {
   return [...posts].sort((a, b) => {
-    if (a.ready !== b.ready) return a.ready ? -1 : 1;
+    // Absent means ready: a caller that has already filtered to finished posts
+    // should not have to restate it.
+    const aReady = a.ready !== false;
+    const bReady = b.ready !== false;
+
+    if (aReady !== bReady) return aReady ? -1 : 1;
 
     return (
       (a.queue_position ?? Number.MAX_SAFE_INTEGER) -

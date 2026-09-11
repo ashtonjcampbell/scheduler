@@ -191,6 +191,62 @@ console.log("\nReordering");
   ]).map((p) => p.id).join();
 
   check("dragging still orders the drafts among themselves", drafts === "x,y", drafts);
+
+  /*
+   * Through assignQueue, not just the helper.
+   *
+   * The helper was right and the bug survived anyway: assignQueue re-sorted by
+   * queue position internally and threw the order away. Testing the piece
+   * rather than the path is exactly how that got shipped, so this asks the
+   * question the app actually asks.
+   */
+  const slots: Slot[] = [
+    { id: "thu", weekday: 4, local_time: "11:00", active: true },
+  ];
+
+  // Noon Pacific on Friday 11 September 2026, so the next Thursday slot is
+  // the 17th — the exact case that was being got wrong.
+  const now = new Date("2026-09-11T19:00:00Z");
+
+  const { assignments } = assignQueue({
+    posts: [
+      { id: "draft-a", queue_position: 0, ready: false },
+      { id: "draft-b", queue_position: 1, ready: false },
+      { id: "ready-1", queue_position: 2, ready: true },
+    ],
+    slots,
+    fixed: [],
+    now,
+  });
+
+  check(
+    "the finished post gets the very next slot",
+    assignments[0]?.postId === "ready-1",
+    assignments[0] ? `${assignments[0].postId} — ${formatPacific(assignments[0].at)}` : "nothing assigned",
+  );
+
+  check(
+    "and the drafts follow it",
+    assignments.map((a) => a.postId).join() === "ready-1,draft-a,draft-b",
+    assignments.map((a) => a.postId).join(),
+  );
+
+  // Callers that have already filtered to finished posts say nothing about it.
+  const { assignments: legacy } = assignQueue({
+    posts: [
+      { id: "b", queue_position: 1 },
+      { id: "a", queue_position: 0 },
+    ],
+    slots,
+    fixed: [],
+    now,
+  });
+
+  check(
+    "posts with no readiness stated are treated as ready",
+    legacy.map((a) => a.postId).join() === "a,b",
+    legacy.map((a) => a.postId).join(),
+  );
 }
 
 console.log(failures === 0 ? "\nAll checks passed.\n" : `\n${failures} check(s) failed.\n`);
