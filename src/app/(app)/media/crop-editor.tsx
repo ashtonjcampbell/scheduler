@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Photo } from "@/lib/database.types";
-import { photoUrl } from "@/lib/photos";
-import { setCrop, type CropInput } from "./crop-actions";
+
+import { setCrop, originalPhotoUrl, type CropInput } from "./crop-actions";
 
 /**
  * Instagram's accepted shapes.
@@ -13,6 +13,9 @@ import { setCrop, type CropInput } from "./crop-actions";
  * centre, without asking. Offering the three shapes it actually supports is
  * the difference between choosing the framing and having it chosen for you.
  */
+/** What the pipeline delivers at, so the result can be stated honestly. */
+const MAX_DELIVERED_WIDTH = 1440;
+
 const ASPECTS = [
   { key: "4:5", label: "Portrait 4:5", ratio: 4 / 5, note: "Tallest Instagram allows" },
   { key: "1:1", label: "Square 1:1", ratio: 1, note: "Classic grid" },
@@ -33,9 +36,38 @@ export function CropEditor({
 
   const [aspectKey, setAspectKey] = useState<string>(photo.crop_aspect ?? "4:5");
 
-  // The visible dimensions of the photo as delivered — the crop is expressed
-  // as fractions of it, so the editor needs its shape to lay the box out.
-  const imageRatio = photo.width && photo.height ? photo.width / photo.height : 1;
+  /*
+   * The ORIGINAL, not the delivered file.
+   *
+   * The stored crop is fractions of the original, so the box only lines up
+   * when it is drawn over the original. Using the delivered file looks fine
+   * until a photo has been cropped once — after that a 4:5 crop reopens as a
+   * box covering five sixths of an image that is already 4:5, which is not a
+   * crop anyone asked for and compounds every time it is saved.
+   *
+   * Its shape is measured from the file itself as it loads, so nothing has to
+   * be recorded or kept in step.
+   */
+  const [source, setSource] = useState<string | null>(null);
+  const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
+  const sourceRatio = sourceSize ? sourceSize.w / sourceSize.h : null;
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void originalPhotoUrl(photo.id).then((result) => {
+      if (cancelled) return;
+      if (result.error) setLoadError(result.error);
+      else setSource(result.url ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.id]);
+
+  const imageRatio = sourceRatio ?? (photo.width && photo.height ? photo.width / photo.height : 1);
 
   const [box, setBox] = useState(() =>
     photo.crop_x !== null && photo.crop_y !== null && photo.crop_w !== null && photo.crop_h !== null
@@ -133,15 +165,30 @@ export function CropEditor({
     });
   };
 
+  /*
+   * What the delivered file will be, measured from the ORIGINAL.
+   *
+   * The crop is cut from the full-resolution source and then resized down to
+   * the delivery width, so a crop taken from a 6000px original is still
+   * delivered at full width — the numbers here have to come from the source,
+   * not from the file this replaces.
+   */
   const resultingSize = useMemo(() => {
-    if (!photo.width || !photo.height) return null;
-    return {
-      w: Math.round(photo.width * box.w),
-      h: Math.round(photo.height * box.h),
-    };
-  }, [photo.width, photo.height, box.w, box.h]);
+    if (!sourceSize) return null;
 
-  const original = photo.storage_path ? photoUrl(photo.storage_path) : null;
+    const w = Math.round(sourceSize.w * box.w);
+    const h = Math.round(sourceSize.h * box.h);
+
+    if (w <= MAX_DELIVERED_WIDTH) return { w, h, upscaled: false };
+
+    return {
+      w: MAX_DELIVERED_WIDTH,
+      h: Math.round((h / w) * MAX_DELIVERED_WIDTH),
+      upscaled: false,
+    };
+  }, [sourceSize, box.w, box.h]);
+
+  const original = source;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 p-4">
@@ -175,6 +222,12 @@ export function CropEditor({
           ))}
         </div>
 
+        {!original && (
+          <p className="mt-3 rounded border border-stone-200 px-3 py-6 text-center text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+            {loadError ?? "Opening the original…"}
+          </p>
+        )}
+
         {original && (
           <div
             ref={frameRef}
@@ -182,7 +235,17 @@ export function CropEditor({
             style={{ aspectRatio: String(imageRatio) }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={original} alt="" className="h-full w-full object-contain opacity-40" />
+            <img
+              src={original}
+              alt=""
+              onLoad={(event) =>
+                setSourceSize({
+                  w: event.currentTarget.naturalWidth,
+                  h: event.currentTarget.naturalHeight,
+                })
+              }
+              className="h-full w-full object-contain opacity-40"
+            />
 
             <div
               onPointerDown={onPointerDown("move")}
@@ -266,12 +329,13 @@ export function CropEditor({
           {resultingSize && (
             <>
               Result: <span className="tabular-nums">{resultingSize.w}×{resultingSize.h}</span>
-              {photo.width && photo.height && (
+              {sourceSize && (
                 <>
                   {" "}
-                  — <span className="tabular-nums">{Math.round(box.w * 100)}%</span> of the width,
-                  from <span className="tabular-nums">{Math.round(box.x * photo.width)}px</span>,{" "}
-                  <span className="tabular-nums">{Math.round(box.y * photo.height)}px</span>
+                  — <span className="tabular-nums">{Math.round(box.w * 100)}%</span> of the
+                  original&rsquo;s width, from{" "}
+                  <span className="tabular-nums">{Math.round(box.x * sourceSize.w)}px</span>,{" "}
+                  <span className="tabular-nums">{Math.round(box.y * sourceSize.h)}px</span>
                 </>
               )}
               .{" "}

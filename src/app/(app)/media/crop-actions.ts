@@ -208,3 +208,45 @@ export async function cropUncroppedTo(
   revalidatePath("/media");
   return { cropped, skipped };
 }
+
+/**
+ * A short-lived URL for the photo's untouched original.
+ *
+ * The cropper has to draw its box over the ORIGINAL, because that is what the
+ * stored box measures. Showing the delivered file instead looks reasonable
+ * right up until a photo has been cropped once — after that the two stop
+ * corresponding, and a 4:5 crop reopens as a box covering five sixths of an
+ * image that is already 4:5. Which is what it did.
+ *
+ * Signed rather than public: originals live in a private bucket, and they are
+ * the full-resolution files. Ten minutes is longer than anyone spends framing
+ * one photo and short enough that a copied link is worthless by the time it
+ * travels anywhere.
+ */
+export async function originalPhotoUrl(
+  photoId: string,
+): Promise<{ url?: string; error?: string }> {
+  const supabase = await supabaseServer();
+
+  const { data: photo, error } = await supabase
+    .from("photos")
+    .select("upload_path, original_removed_at")
+    .eq("id", photoId)
+    .single();
+
+  if (error) return { error: error.message };
+
+  if (!photo.upload_path || photo.original_removed_at) {
+    return { error: "The original is gone, so this photo can no longer be re-cropped." };
+  }
+
+  const { data, error: signError } = await supabase.storage
+    .from("uploads")
+    .createSignedUrl(photo.upload_path, 600);
+
+  if (signError || !data?.signedUrl) {
+    return { error: signError?.message ?? "Could not open the original." };
+  }
+
+  return { url: data.signedUrl };
+}
