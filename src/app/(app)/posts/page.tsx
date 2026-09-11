@@ -10,8 +10,9 @@ export const dynamic = "force-dynamic";
 
 const STATUS_LABELS: Record<PostStatus, string> = {
   idea: "Idea",
-  rough_draft: "Rough draft",
-  preview_draft: "Preview draft",
+  // Kept only so an old row still renders a name; nothing creates these.
+  rough_draft: "Draft",
+  preview_draft: "Draft",
   queued: "In queue",
   scheduled: "Scheduled",
   publishing: "Publishing",

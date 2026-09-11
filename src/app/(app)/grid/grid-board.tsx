@@ -13,6 +13,7 @@ export type Tile = {
   title: string | null;
   caption: string;
   status: PostStatus;
+  ready: boolean;
   was_dry_run: boolean;
   at: string | null;
   cover: string | null;
@@ -166,7 +167,11 @@ export function GridBoard({
                     </span>
                   )}
 
-                  <StatusDot status={occupant.status} dryRun={occupant.was_dry_run} />
+                  <StatusDot
+                    status={occupant.status}
+                    ready={occupant.ready}
+                    dryRun={occupant.was_dry_run}
+                  />
 
                   <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-1 pb-0.5 pt-3 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
                     {tile.at ? formatPacific(tile.at) : "preview draft"}
@@ -214,20 +219,40 @@ export function GridBoard({
   );
 }
 
-function StatusDot({ status, dryRun }: { status: PostStatus; dryRun: boolean }) {
-  const colour =
-    status === "published"
-      ? dryRun
-        ? "bg-amber-500"
-        : "bg-emerald-500"
-      : status === "preview_draft"
-        ? "bg-stone-400"
-        : "bg-sky-500";
+function StatusDot({
+  status,
+  ready,
+  dryRun,
+}: {
+  status: PostStatus;
+  ready: boolean;
+  dryRun: boolean;
+}) {
+  const published = status === "published";
+
+  // Readiness is what decides whether a tile ever actually appears on the
+  // profile, so that is what the dot reports — not which list the post
+  // happens to be filed under.
+  const colour = published
+    ? dryRun
+      ? "bg-amber-500"
+      : "bg-emerald-500"
+    : ready
+      ? "bg-sky-500"
+      : "bg-stone-400";
 
   return (
     <span
       className={`absolute left-1 top-1 h-2 w-2 rounded-full ring-1 ring-white/70 ${colour}`}
-      title={dryRun ? "Published in dry run — not really posted" : status}
+      title={
+        published
+          ? dryRun
+            ? "Published in dry run — not really posted"
+            : "Published"
+          : ready
+            ? "Ready — this will publish"
+            : "Draft — it will be passed over until you finish it"
+      }
     />
   );
 }

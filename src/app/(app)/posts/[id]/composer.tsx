@@ -436,9 +436,10 @@ function SaveIndicator({
     );
   }
 
-  if (state === "saved") {
-    return <span className="text-xs text-stone-500 dark:text-stone-400">Saved</span>;
-  }
-
-  return null;
+  // Says so even before anything has been edited. A greyed-out Save button with
+  // no explanation reads as broken rather than as "there is nothing to save",
+  // and the obvious wrong guess is that something else is blocking it.
+  return (
+    <span className="text-xs text-stone-500 dark:text-stone-400">All changes saved</span>
+  );
 }

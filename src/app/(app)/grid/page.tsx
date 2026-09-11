@@ -32,7 +32,7 @@ export default async function GridPage() {
       supabase
         .from("posts")
         .select(
-          "id, title, caption, status, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
+          "id, title, caption, status, ready, scheduled_for, published_at, queue_position, was_dry_run, ig_media_id",
         )
         .in("status", ["preview_draft", "queued", "scheduled", "publishing", "published"]),
       supabase.from("schedule_slots").select("*"),
@@ -119,6 +119,7 @@ export default async function GridPage() {
   const live = (liveMedia ?? []).filter((m) => !ownIgIds.has(m.id));
 
   const upcoming = planned.filter((t) => t.status !== "published").length;
+  const notReady = planned.filter((t) => t.status !== "published" && !t.ready).length;
 
   return (
     <div className="space-y-5">
@@ -134,6 +135,7 @@ export default async function GridPage() {
 
       <p className="text-xs text-stone-500 dark:text-stone-400">
         {upcoming} still to come
+        {notReady > 0 && ` · ${notReady} still a draft`}
         {live.length > 0 && ` · ${live.length} already on @${settings?.ig_username}`}
         {settings?.grid_synced_at && ` · synced ${formatPacific(settings.grid_synced_at)}`}
       </p>
@@ -149,6 +151,7 @@ export default async function GridPage() {
             title: t.title,
             caption: t.caption,
             status: t.status,
+            ready: t.ready,
             was_dry_run: t.was_dry_run,
             at: t.at,
             cover: t.cover,
@@ -178,8 +181,8 @@ export default async function GridPage() {
 
       <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-stone-500 dark:text-stone-400">
         <Legend colour="bg-emerald-500" label="Published" />
-        <Legend colour="bg-sky-500" label="Scheduled or queued" />
-        <Legend colour="bg-stone-400" label="Preview draft" />
+        <Legend colour="bg-sky-500" label="Ready to publish" />
+        <Legend colour="bg-stone-400" label="Draft — will be passed over" />
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full border border-stone-400" />
           No dot — already on Instagram

@@ -39,15 +39,12 @@ export async function addToQueue(postId: string): Promise<{ error?: string }> {
     return { error: "That post has already gone out." };
   }
 
-  // A post with no photos cannot be published, and finding that out at the
-  // slot is far too late.
-  const { count } = await supabase
-    .from("post_photos")
-    .select("*", { head: true, count: "exact" })
-    .eq("post_id", postId);
-
-  if (!count) return { error: "Add at least one photo before queueing this." };
-
+  /*
+   * No completeness check here any more. Being in the queue is about WHERE a
+   * post sits, not whether it is finished — an unfinished one holding the slot
+   * it is meant for is exactly the point. What it cannot do is publish, and
+   * that is `setReady`, which is where the checks moved to.
+   */
   const { data: last } = await supabase
     .from("posts")
     .select("queue_position")
@@ -155,10 +152,16 @@ export async function scheduleFixed(
   return {};
 }
 
-/** Set a draft state: rough drafts are hidden from the grid, previews are not. */
+/**
+ * Park a post as a draft.
+ *
+ * A draft shows in the grid and can never publish. The old "rough draft",
+ * hidden from the grid entirely, is gone: an unfinished post is most useful
+ * precisely when you CAN see it sitting there while deciding what comes next.
+ */
 export async function setDraftState(
   postId: string,
-  status: Extract<PostStatus, "idea" | "rough_draft" | "preview_draft">,
+  status: Extract<PostStatus, "idea" | "preview_draft">,
 ): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
 
@@ -167,6 +170,54 @@ export async function setDraftState(
     .update({ status, queue_position: null, scheduled_for: null, slot_id: null })
     .eq("id", postId);
 
+  if (error) return { error: error.message };
+
+  revalidate(postId);
+  return {};
+}
+
+/**
+ * Declare a post finished, or put it back to being a draft.
+ *
+ * This is the only thing that lets a post publish. Queue position decides when
+ * its turn comes round; this decides whether it takes that turn or waves it on
+ * to whatever is behind it.
+ *
+ * The completeness checks live here rather than on queueing, because this is
+ * the moment the promise is made. Finding out at the slot that a post has no
+ * photo is far too late — by then the only choices are publishing something
+ * broken or silently doing nothing.
+ */
+export async function setReady(
+  postId: string,
+  ready: boolean,
+): Promise<{ error?: string }> {
+  const supabase = await supabaseServer();
+
+  if (ready) {
+    const { data: post } = await supabase
+      .from("posts")
+      .select("caption, status")
+      .eq("id", postId)
+      .single();
+
+    if (post?.status === "published") {
+      return { error: "That post has already gone out." };
+    }
+
+    const { count } = await supabase
+      .from("post_photos")
+      .select("*", { head: true, count: "exact" })
+      .eq("post_id", postId);
+
+    if (!count) return { error: "Add at least one photo before marking this ready." };
+
+    if (!post?.caption?.trim()) {
+      return { error: "Write a caption before marking this ready." };
+    }
+  }
+
+  const { error } = await supabase.from("posts").update({ ready }).eq("id", postId);
   if (error) return { error: error.message };
 
   revalidate(postId);

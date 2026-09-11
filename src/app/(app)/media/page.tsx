@@ -21,7 +21,9 @@ export default async function MediaPage({
   searchParams: Promise<{ filter?: string }>;
 }) {
   const { filter: raw } = await searchParams;
-  const filter: MediaFilter = isMediaFilter(raw) ? raw : "all";
+  // Defaults to what is free to use. Opening the bank on everything meant
+  // scrolling past photos already spoken for to find the ones that are not.
+  const filter: MediaFilter = isMediaFilter(raw) ? raw : "available";
 
   const supabase = await supabaseServer();
 
@@ -94,7 +96,7 @@ export default async function MediaPage({
           return (
             <Link
               key={key}
-              href={key === "all" ? "/media" : `/media?filter=${key}`}
+              href={key === "available" ? "/media" : `/media?filter=${key}`}
               aria-current={key === filter ? "page" : undefined}
               className={[
                 key === filter

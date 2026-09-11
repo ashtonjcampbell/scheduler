@@ -4,6 +4,7 @@ import { publish, publishingLimitRemaining, InstagramError } from "./lib/instagr
 // about whose turn it is.
 import { syncGrid } from "./sync-grid.js";
 import { syncPerformance } from "./sync-performance.js";
+import { sweepEmptyPosts } from "./sweep-empty-posts.js";
 import { assignQueue } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
@@ -66,6 +67,9 @@ async function main() {
    */
   await refreshPerformanceIfStale().catch(() => {});
 
+  // Tidying must never be able to stop a post going out.
+  await sweepEmptyPosts().catch(() => {});
+
   const due = await findDue();
 
   if (due.length === 0) {
@@ -119,7 +123,7 @@ async function findDue(): Promise<DuePost[]> {
   const [{ data: posts }, { data: slots }] = await Promise.all([
     supabase
       .from("posts")
-      .select("id, status, scheduled_for, queue_position")
+      .select("id, status, scheduled_for, queue_position, ready")
       .in("status", ["queued", "scheduled"]),
     supabase.from("schedule_slots").select("*"),
   ]);
@@ -128,7 +132,7 @@ async function findDue(): Promise<DuePost[]> {
 
   const fixed = all
     .filter((p) => p.status === "scheduled" && p.scheduled_for)
-    .map((p) => ({ id: p.id, scheduled_for: p.scheduled_for! }));
+    .map((p) => ({ id: p.id, scheduled_for: p.scheduled_for!, ready: p.ready }));
 
   const queued = all
     .filter((p) => p.status === "queued")
@@ -138,14 +142,46 @@ async function findDue(): Promise<DuePost[]> {
         (b.queue_position ?? Number.MAX_SAFE_INTEGER),
     );
 
+  /*
+   * Slots are laid out over the queue in order, ready or not — that ordering
+   * is the plan, and it is what the app shows.
+   *
+   * What publishes is a separate question. Count how many slots have come due,
+   * then hand them to the first posts that are actually READY, in queue order.
+   * An unfinished draft is passed over rather than blocking everything behind
+   * it, and keeps its place for the next slot.
+   */
   const { assignments } = assignQueue({ posts: queued, slots: slots ?? [], fixed, now });
 
+  const readyById = new Map(all.map((p) => [p.id, p.ready]));
+  const dueSlots = assignments.filter((a) => a.at <= now);
+
+  const readyInOrder = assignments
+    .filter((a) => readyById.get(a.postId))
+    .slice(0, dueSlots.length);
+
   const due: DuePost[] = [
+    // A fixed time is a promise about an instant, so it cannot be handed to a
+    // different post. An unready one simply does not go out.
     ...fixed
-      .filter((p) => new Date(p.scheduled_for) <= now)
+      .filter((p) => p.ready && new Date(p.scheduled_for) <= now)
       .map((p) => ({ id: p.id, at: new Date(p.scheduled_for) })),
-    ...assignments.filter((a) => a.at <= now).map((a) => ({ id: a.postId, at: a.at })),
+
+    // Pair each due slot with the post that will actually fill it, so the log
+    // records the time the slot belonged to rather than the skipped post's.
+    ...readyInOrder.map((a, index) => ({
+      id: a.postId,
+      at: dueSlots[index]?.at ?? a.at,
+    })),
   ];
+
+  const skipped = dueSlots.length - readyInOrder.length;
+  if (skipped > 0) {
+    await log(
+      "info",
+      `${skipped} slot(s) had no publish-ready post waiting — the queue rolls forward`,
+    );
+  }
 
   // Oldest first, so a backlog clears in the order it was meant to go out.
   return due.sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -163,6 +199,9 @@ async function publishOne(
     .from("posts")
     .update({ status: "publishing", claimed_at: new Date().toISOString() })
     .eq("id", postId)
+    // Re-checked at the moment of claiming, not just when the list was built:
+    // a post put back to a draft in the seconds since must not still go out.
+    .eq("ready", true)
     .in("status", ["queued", "scheduled"])
     .select("id, caption, hashtag_placement, attempt_count");
 

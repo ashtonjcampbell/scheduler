@@ -123,8 +123,7 @@ export function SchedulePanel({ post, photoCount }: { post: Post; photoCount: nu
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {(
                   [
-                    ["preview_draft", "Preview draft", "Shows in the grid, never publishes"],
-                    ["rough_draft", "Rough draft", "Hidden from the grid entirely"],
+                    ["preview_draft", "Draft", "Shows in the grid, never publishes"],
                     ["idea", "Idea", "Not a real post yet"],
                   ] as const
                 ).map(([value, label, hint]) => (

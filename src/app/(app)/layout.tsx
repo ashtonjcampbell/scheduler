@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import { NavLinks } from "@/components/nav-links";
+import { createPost } from "./posts/actions";
 import { DryRunBanner } from "@/components/dry-run-banner";
 import { signOut } from "./actions";
 
@@ -31,7 +32,19 @@ export default async function AppLayout({
 
           <NavLinks />
 
-          <form action={signOut} className="ml-auto">
+          {/* In the sticky bar rather than on the Posts page, because the
+              thought "I should post that" arrives while looking at photos,
+              three screens down, nowhere near a button. */}
+          <form action={createPost} className="ml-auto">
+            <button
+              type="submit"
+              className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+            >
+              New post
+            </button>
+          </form>
+
+          <form action={signOut}>
             <button
               type="submit"
               className="text-xs text-stone-500 transition hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"

@@ -58,7 +58,7 @@ export async function promoteIdea(id: string): Promise<never | { error: string }
 
   const { error } = await supabase
     .from("posts")
-    .update({ status: "rough_draft" })
+    .update({ status: "preview_draft" })
     .eq("id", id)
     .eq("status", "idea");
 

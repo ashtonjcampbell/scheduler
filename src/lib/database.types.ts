@@ -62,6 +62,14 @@ export type Post = {
   caption: string;
   hashtag_placement: HashtagPlacement;
   status: PostStatus;
+  /**
+   * Declared finished and allowed to publish.
+   *
+   * Separate from status on purpose: status says where a post sits in the
+   * queue, this says whether it may actually go out from there. A draft can
+   * hold a queue position for weeks without ever publishing.
+   */
+  ready: boolean;
   schedule_mode: ScheduleMode;
   scheduled_for: string | null;
   slot_id: string | null;
@@ -274,6 +282,7 @@ export type Database = {
         | "schedule_mode"
         | "attempt_count"
         | "was_dry_run"
+        | "ready"
       >;
       post_photos: Table<PostPhoto, "id">;
       photo_tags: Table<PhotoTag, "id">;
