@@ -26,6 +26,9 @@ export const REQUIRED_SCOPES = [
   "instagram_basic",
   "instagram_content_publish",
   "instagram_manage_comments",
+  // Reads how posts performed, so the app can say which slots actually earn
+  // their place instead of guessing. Read-only: it cannot change anything.
+  "instagram_manage_insights",
   "pages_show_list",
   "pages_read_engagement",
   "business_management",
