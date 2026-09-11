@@ -6,9 +6,9 @@
   "description": "Background jobs run by GitHub Actions: colour-managed photo processing and publishing to Instagram.",
   "scripts": {
     "process-media": "tsx src/process-media.ts",
-    "publish": "tsx src/publish.ts",
+    "publish": "node scripts/link-root-modules.mjs && tsx src/publish.ts",
     "refresh-token": "tsx src/refresh-token.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/link-root-modules.mjs && tsc --noEmit",
     "verify-pipeline": "tsx src/verify-pipeline.ts",
     "sync-grid": "tsx src/sync-grid.ts"
   },
