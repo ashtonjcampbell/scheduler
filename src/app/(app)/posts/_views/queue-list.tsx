@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatPacific } from "@/lib/time";
 import { reorder } from "@/lib/queue";
-import { reorderQueue, setReady } from "./actions";
+import { reorderQueue, setReady } from "../../queue/actions";
 
 type Item = {
   id: string;
@@ -113,7 +113,11 @@ export function QueueList({
 
             <Link href={`/posts/${post.id}`} className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
-                {firstLine(post.caption) ?? "Untitled post"}
+                {firstLine(post.caption) ?? (
+                        <span className="italic text-stone-400 dark:text-stone-500">
+                          No caption
+                        </span>
+                      )}
               </p>
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 {post.at ? (

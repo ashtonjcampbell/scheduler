@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatPacific } from "@/lib/time";
 import type { PostStatus } from "@/lib/database.types";
 import { useDragReorder } from "@/components/use-drag-reorder";
-import { reorderQueue } from "../queue/actions";
+import { reorderQueue } from "../../queue/actions";
 
 export type Tile = {
   id: string;
@@ -149,7 +149,7 @@ export function GridBoard({
                   // A link inside a draggable element starts its own drag of the
                   // URL, which cancels the reorder before it begins.
                   draggable={false}
-                  title={`${firstLine(occupant.caption) ?? "Untitled"}${
+                  title={`${firstLine(occupant.caption) ?? "No caption"}${
                     tile.at ? ` — ${formatPacific(tile.at)}` : ""
                   }`}
                   className="group block h-full w-full overflow-hidden bg-stone-100 dark:bg-stone-950"
