@@ -62,8 +62,15 @@ export default async function GridPage() {
   }
 
   const all = posts ?? [];
+
+  /*
+   * The running order is everything holding a POSITION — drafts included.
+   * Keying off the "queued" status instead is what made a draft look queued,
+   * and would now hide drafts from the grid entirely, which is the opposite of
+   * what the grid is for.
+   */
   const queued = all
-    .filter((p) => p.status === "queued")
+    .filter((p) => p.queue_position !== null && p.status !== "published")
     .sort(
       (a, b) =>
         (a.queue_position ?? Number.MAX_SAFE_INTEGER) -
@@ -76,7 +83,7 @@ export default async function GridPage() {
     posts: queued,
     slots: slots ?? [],
     fixed: all
-      .filter((p) => p.scheduled_for && p.status !== "queued")
+      .filter((p) => p.scheduled_for && p.queue_position === null)
       .map((p) => ({ id: p.id, scheduled_for: p.scheduled_for! })),
     now: new Date(),
   });
@@ -151,6 +158,7 @@ export default async function GridPage() {
             caption: t.caption,
             status: t.status,
             ready: t.ready,
+            inOrder: t.queue_position !== null && t.status !== "published",
             was_dry_run: t.was_dry_run,
             at: t.at,
             cover: t.cover,

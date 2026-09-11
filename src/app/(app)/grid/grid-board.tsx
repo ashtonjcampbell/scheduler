@@ -13,6 +13,8 @@ export type Tile = {
   caption: string;
   status: PostStatus;
   ready: boolean;
+  /** Holds a place in the running order, so it can be dragged. */
+  inOrder: boolean;
   was_dry_run: boolean;
   at: string | null;
   cover: string | null;
@@ -59,7 +61,7 @@ export function GridBoard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const queuedIds = planned.filter((t) => t.status === "queued").map((t) => t.id);
+  const queuedIds = planned.filter((t) => t.inOrder).map((t) => t.id);
   const fromServer = queuedIds.join(",");
 
   // Held locally so a drag redraws instantly; the server hears about it once,
@@ -106,7 +108,7 @@ export function GridBoard({
   // posts occupy. Everything else keeps its place.
   let slot = 0;
   const laidOut = planned.map((tile) => {
-    if (tile.status !== "queued") return { tile, occupant: tile };
+    if (!tile.inOrder) return { tile, occupant: tile };
     const occupant = byId.get(order[slot++] ?? tile.id) ?? tile;
     return { tile, occupant };
   });
@@ -115,8 +117,8 @@ export function GridBoard({
     <div className="space-y-3">
       {queuedIds.length > 1 && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Drag a queued post to move it — the dates stay put and the posts move
-          between them.
+          Drag to reorder — drafts included. The dates stay put and the posts
+          move between them.
         </p>
       )}
 
@@ -129,7 +131,7 @@ export function GridBoard({
       <div className={pending ? "mx-auto max-w-md opacity-60" : "mx-auto max-w-md"}>
         <div className="grid grid-cols-3 gap-0.5">
           {laidOut.map(({ tile, occupant }) => {
-            const draggable = tile.status === "queued";
+            const draggable = tile.inOrder;
 
             return (
               <div

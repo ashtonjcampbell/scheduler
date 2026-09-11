@@ -32,7 +32,10 @@ export async function createPost(): Promise<never> {
   const { data, error } = await supabase
     .from("posts")
     .insert({
-      status: "queued",
+      // A draft with a place in the order — NOT queued. Those are different
+      // things, and conflating them is what told the owner their drafts were
+      // queued when none of them were.
+      status: "preview_draft",
       schedule_mode: "queue",
       queue_position: (last?.[0]?.queue_position ?? -1) + 1,
     })

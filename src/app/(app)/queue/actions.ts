@@ -26,70 +26,14 @@ function revalidate(postId?: string) {
   if (postId) revalidatePath(`/posts/${postId}`);
 }
 
-export async function addToQueue(postId: string): Promise<{ error?: string }> {
-  const supabase = await supabaseServer();
-
-  const { data: post } = await supabase
-    .from("posts")
-    .select("status")
-    .eq("id", postId)
-    .single();
-
-  if (post?.status === "published") {
-    return { error: "That post has already gone out." };
-  }
-
-  /*
-   * No completeness check here any more. Being in the queue is about WHERE a
-   * post sits, not whether it is finished — an unfinished one holding the slot
-   * it is meant for is exactly the point. What it cannot do is publish, and
-   * that is `setReady`, which is where the checks moved to.
-   */
-  const { data: last } = await supabase
-    .from("posts")
-    .select("queue_position")
-    .eq("status", "queued")
-    .order("queue_position", { ascending: false })
-    .limit(1);
-
-  const next = (last?.[0]?.queue_position ?? -1) + 1;
-
-  const { error } = await supabase
-    .from("posts")
-    .update({
-      status: "queued",
-      schedule_mode: "queue",
-      queue_position: next,
-      // A queued post has no committed time; it takes whatever slot is free
-      // when its turn comes.
-      scheduled_for: null,
-      slot_id: null,
-    })
-    .eq("id", postId);
-
-  if (error) return { error: error.message };
-
-  revalidate(postId);
-  return {};
-}
-
-/** Take a post out of the queue, back to being a draft. */
-export async function removeFromQueue(
-  postId: string,
-  to: PostStatus = "preview_draft",
-): Promise<{ error?: string }> {
-  const supabase = await supabaseServer();
-
-  const { error } = await supabase
-    .from("posts")
-    .update({ status: to, queue_position: null, scheduled_for: null, slot_id: null })
-    .eq("id", postId);
-
-  if (error) return { error: error.message };
-
-  revalidate(postId);
-  return {};
-}
+/*
+ * addToQueue and removeFromQueue are gone.
+ *
+ * They set and cleared a queue position, which was placement — and placement
+ * stopped being a decision worth asking about once every post took a place in
+ * the order when it was created. What is left is `setReady`, which answers the
+ * only question that remains: does this publish when its turn comes.
+ */
 
 /**
  * Rewrite the whole queue order.
@@ -219,7 +163,6 @@ export async function setReady(
       await supabase
         .from("posts")
         .update({
-          status: "queued",
           schedule_mode: "queue",
           queue_position: (last?.[0]?.queue_position ?? -1) + 1,
         })
@@ -250,7 +193,28 @@ export async function setReady(
     }
   }
 
-  const { error } = await supabase.from("posts").update({ ready }).eq("id", postId);
+  /*
+   * Status follows readiness, and the place in the order is kept either way.
+   *
+   * "queued" now means exactly what it says — in the queue, will publish. A
+   * draft keeps its position so the grid can still show it at the date it is
+   * meant for, and can still be dragged around; it simply is not in the queue.
+   * A post pinned to a fixed time keeps that status, since its placement was a
+   * different decision.
+   */
+  const patch: { ready: boolean; status?: "queued" | "preview_draft" } = { ready };
+
+  const { data: current } = await supabase
+    .from("posts")
+    .select("status")
+    .eq("id", postId)
+    .single();
+
+  if (current?.status === "queued" || current?.status === "preview_draft") {
+    patch.status = ready ? "queued" : "preview_draft";
+  }
+
+  const { error } = await supabase.from("posts").update(patch).eq("id", postId);
   if (error) return { error: error.message };
 
   revalidate(postId);
