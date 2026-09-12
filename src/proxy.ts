@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv, serverEnv } from "@/lib/env";
+import { retryingFetch } from "@/lib/supabase/retry";
 
 /** Routes reachable without signing in. Everything else is gated. */
 const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/error", "/privacy"];
@@ -17,6 +18,8 @@ export async function proxy(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      // A one-second Supabase hiccup must not read as "not signed in".
+      global: { fetch: retryingFetch },
       cookies: {
         getAll() {
           return request.cookies.getAll();

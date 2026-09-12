@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { publicEnv } from "@/lib/env";
+import { retryingFetch } from "./retry";
 import type { Database } from "@/lib/database.types";
 
 /**
@@ -18,6 +19,7 @@ export async function supabaseServer() {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      global: { fetch: retryingFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll();
