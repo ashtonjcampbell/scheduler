@@ -160,7 +160,17 @@ export function Notebook({
         </span>
       </div>
 
-      <div className="mt-2 overflow-hidden rounded-lg border border-stone-300 bg-white focus-within:border-stone-500 dark:border-stone-700 dark:bg-stone-950">
+      {/*
+        NO `overflow-hidden` HERE, however much the rounded corners want it.
+
+        An ancestor with `overflow: hidden` becomes the scroll container that a
+        sticky child sticks inside — so the toolbar was pinned to the top of
+        this box, which does not scroll, and therefore never moved at all. It
+        looked exactly like sticky being ignored.
+
+        The corners are kept by rounding the toolbar's own top edge instead.
+      */}
+      <div className="mt-2 rounded-lg border border-stone-300 bg-white focus-within:border-stone-500 dark:border-stone-700 dark:bg-stone-950">
         <Toolbar editor={editor} />
         <EditorContent editor={editor} />
       </div>

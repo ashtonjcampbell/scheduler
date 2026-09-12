@@ -223,7 +223,9 @@ export function PhotoPicker({
                         src={thumbUrl(photo)!}
                         alt={photo.alt_text ?? photo.original_filename}
                         loading="lazy"
-                        className="aspect-square w-full object-cover"
+                        // Same shape as the strip above it and the grid
+                        // beyond it — one library, one aspect.
+                        className="aspect-[4/5] w-full object-cover"
                       />
                     )}
 

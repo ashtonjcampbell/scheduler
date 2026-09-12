@@ -88,7 +88,7 @@ function Buttons({ editor }: { editor: Editor }) {
       screen and a half above. Opaque rather than translucent, because text
       sliding visibly under it reads as a rendering fault.
     */
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-stone-200 bg-white px-2 py-1.5 dark:border-stone-800 dark:bg-stone-950">
+    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 rounded-t-[7px] border-b border-stone-200 bg-white px-2 py-1.5 dark:border-stone-800 dark:bg-stone-950">
       <Button on={state.bold} keep={keep} onPress={() => editor.chain().focus().toggleBold().run()} label="Bold" hint="Ctrl+B">
         <span className="font-semibold">B</span>
       </Button>

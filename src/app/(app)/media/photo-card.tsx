@@ -53,7 +53,14 @@ export function PhotoCard({
         isSelected ? "ring-2 ring-stone-900 dark:ring-stone-100" : "",
       ].join(" ")}
     >
-      <div className="relative aspect-square bg-stone-100 dark:bg-stone-950">
+      {/*
+        4:5, because that is what Instagram will show.
+
+        A square thumbnail of a 4:5 photo is a lie by omission — it crops the
+        top and bottom off the preview of a picture that is not cropped, so
+        the library disagrees with the grid, the composer and the post.
+      */}
+      <div className="relative aspect-[4/5] bg-stone-100 dark:bg-stone-950">
         {photo.status === "ready" && thumbUrl(photo) ? (
           // Grids show the thumbnail; the full processed file is one click
           // away below, because that is the one whose colour matters.
