@@ -3,11 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/*
+ * Four, not five. The hashtag library is real and still reachable — from
+ * Settings, where a thing you set up once and then leave alone belongs. It was
+ * taking a permanent slot in the bar for something visited about twice a year.
+ */
 const SECTIONS = [
   { href: "/media", label: "Media" },
   { href: "/posts", label: "Posts" },
-  { href: "/ideas", label: "Notes" },
-  { href: "/hashtags", label: "Hashtags" },
+  { href: "/ideas", label: "Ideas" },
   { href: "/settings", label: "Settings" },
 ] as const;
 

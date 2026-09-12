@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SlotManager } from "./slot-manager";
@@ -62,6 +63,24 @@ export default async function SettingsPage({
       />
       <SlotManager slots={slots ?? []} />
       <GeneralSettings settings={settings} />
+
+      {/*
+        The hashtag library used to have its own place in the navigation, for
+        something set up once and then left alone. It lives here now, one line,
+        where the other things you configure and forget are.
+      */}
+      <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="text-base">Hashtag library</h2>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+          Your saved tags and the categories the shuffle draws from.
+        </p>
+        <Link
+          href="/hashtags"
+          className="mt-3 inline-block rounded-lg border border-stone-300 px-3 py-1.5 text-sm dark:border-stone-700"
+        >
+          Open the library
+        </Link>
+      </section>
     </div>
   );
 }

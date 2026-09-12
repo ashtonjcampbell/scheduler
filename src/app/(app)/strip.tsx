@@ -117,14 +117,14 @@ export function Strip() {
       <button
         type="button"
         onClick={toggle}
-        title="Show the grid and your notes"
+        title="Show the grid and your ideas"
         style={{ writingMode: "vertical-rl" }}
         /* Pinned to the right edge of the sidebar, not the window — on the
            window it sat on top of the navigation it is supposed to sit beside.
            `left-56` is the sidebar's own width. */
         className="fixed left-56 top-28 z-20 hidden rounded-r-md border border-l-0 border-stone-300 bg-white px-1.5 py-4 text-xs tracking-wide text-stone-500 shadow-sm transition hover:text-stone-900 md:block dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
       >
-        Grid &amp; notes
+        Grid &amp; ideas
       </button>
     );
   }
@@ -296,7 +296,7 @@ function Lines({ html, label }: { html: string; label: string }) {
         href="/ideas"
         className="mt-3 block text-xs text-stone-400 underline-offset-2 hover:underline dark:text-stone-500"
       >
-        Edit on the Notes page →
+        Edit on the Ideas page →
       </Link>
     </>
   );

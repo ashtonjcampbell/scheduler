@@ -2,7 +2,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { Notebook } from "./notepad";
 import { NOTEBOOK_LABELS } from "@/lib/notebooks";
 
-export const metadata = { title: "Notes" };
+export const metadata = { title: "Ideas" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * Both are readable from the composer while you write a caption, which is the
  * moment they are actually for.
  */
-export default async function NotesPage() {
+export default async function IdeasPage() {
   const supabase = await supabaseServer();
 
   const { data: notes, error } = await supabase
@@ -36,7 +36,7 @@ export default async function NotesPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Notes</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Ideas</h1>
       </div>
 
       <Notebook
