@@ -33,10 +33,6 @@ export default async function HashtagsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Hashtag library</h1>
-        <p className="mt-1 max-w-2xl text-sm text-stone-600 dark:text-stone-400">
-          Your saved tags, grouped by category. Retired tags stay here for
-          reference but are never offered when building a post.
-        </p>
       </div>
 
       <HashtagLibrary categories={categories ?? []} tags={tags ?? []} />

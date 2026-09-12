@@ -1,26 +1,122 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * The same skin as HQ.
+ *
+ * Two apps for the same person on the same day should not feel like two
+ * companies. The tokens below are lifted from HQ's app.css rather than
+ * matched by eye, so when one is adjusted the other can be given the same
+ * numbers instead of a guess.
+ *
+ * HOW IT IS APPLIED matters more than the values. The app is written in
+ * Tailwind's stone palette throughout, so rather than rewriting a hundred
+ * files, stone is REDEFINED to HQ's warm greys and the status colours to
+ * HQ's. Every existing `bg-stone-900` and `text-stone-500` then lands on the
+ * right colour on its own, and a class written next week does too.
+ *
+ * Fonts are served from this app rather than fetched from Google: one less
+ * thing to be slow, and the app looks right on the first paint.
+ */
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin.woff2") format("woff2");
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@font-face {
+  font-family: "Young Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/young-serif-latin.woff2") format("woff2");
 }
 
+@theme {
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: "Young Serif", Georgia, serif;
+
+  /*
+   * Stone, redrawn warm.
+   *
+   * The ends are HQ's own: 50 is its page, 100 its raised surface, 200 its
+   * border, 400 its faint text, 600 its dim text, 950 its dark page. The
+   * steps between are filled in so the ramp stays even.
+   */
+  --color-stone-50: #faf8f4;
+  --color-stone-100: #f2efe8;
+  --color-stone-200: #e7e1d6;
+  --color-stone-300: #d3ccbe;
+  --color-stone-400: #a29c91;
+  --color-stone-500: #857f75;
+  --color-stone-600: #6f6a60;
+  --color-stone-700: #55514a;
+  --color-stone-800: #383b36;
+  --color-stone-900: #232522;
+  --color-stone-950: #191a18;
+
+  /* HQ's surface, so a card is a shade warmer than true white. */
+  --color-white: #fffdfa;
+
+  /* Status, in HQ's language: sage for done, slate for ready, ochre for
+     attention, and its muted brick for wrong. */
+  --color-emerald-500: #6d8f6a;
+  --color-emerald-600: #5c7b59;
+  --color-sky-500: #6d8595;
+  --color-sky-600: #5d7383;
+  --color-amber-300: #dcc08a;
+  --color-amber-500: #a8783f;
+  --color-amber-600: #93682f;
+  --color-amber-700: #7d5827;
+  --color-amber-50: #f6efe3;
+  --color-amber-900: #2b251a;
+  --color-amber-950: #221d14;
+  --color-amber-200: #cba36c;
+  --color-amber-400: #cba36c;
+  --color-red-300: #d4a49c;
+  --color-red-500: #a85449;
+  --color-red-600: #96483e;
+  --color-red-700: #854036;
+  --color-red-800: #6f362e;
+  --color-red-900: #2e211f;
+  --color-red-950: #241a18;
+  --color-red-50: #f7eae7;
+  --color-red-200: #d4867b;
+  --color-red-400: #d4867b;
+}
+
+/* Dark is HQ's dark: not black, a green-grey that sits under warm text. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-stone-50);
+  color: var(--color-stone-900);
+  font-family: var(--font-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--color-stone-950);
+    color: var(--color-stone-100);
+  }
+}
+
+/*
+ * Headings are the serif, everywhere, without every heading having to say so.
+ *
+ * HQ does this and it is most of why it reads the way it does — the serif is
+ * doing the work that bold weight would otherwise have to.
+ */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
 }

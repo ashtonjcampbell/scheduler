@@ -99,11 +99,6 @@ export async function DraftsView() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-stone-600 dark:text-stone-400">
-        Posts still to finish. They hold their place in the grid, but the
-        publisher passes over them until you mark one ready.
-      </p>
-
       {failed.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-red-800 dark:text-red-300">

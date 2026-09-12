@@ -52,9 +52,6 @@ export default async function SettingsPage({
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-          Posting times, Instagram, and how long things are kept.
-        </p>
       </div>
 
       <InstagramConnect

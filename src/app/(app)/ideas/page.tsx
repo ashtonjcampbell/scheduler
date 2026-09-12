@@ -1,62 +1,55 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { thumbUrl } from "@/lib/photos";
-import { IdeaList } from "./idea-list";
-import { Notepad } from "./notepad";
+import { Notebook } from "./notepad";
+import { NOTEBOOK_LABELS } from "@/lib/notebooks";
 
-export const metadata = { title: "Ideas" };
+export const metadata = { title: "Notes" };
 export const dynamic = "force-dynamic";
 
-export default async function IdeasPage() {
+/**
+ * Two notebooks.
+ *
+ * This was a list of titled notes plus a list of ideas-as-posts, which meant
+ * naming things, choosing between them and deciding which list a thought
+ * belonged in — filing, in place of writing. In practice there are two
+ * things worth keeping: what you are trying to do, and the pile.
+ *
+ * Both are readable from the composer while you write a caption, which is the
+ * moment they are actually for.
+ */
+export default async function NotesPage() {
   const supabase = await supabaseServer();
 
-  const [{ data: ideas, error }, { data: links }, { data: photos }, { data: notes }] =
-    await Promise.all([
-      supabase
-        .from("posts")
-        .select("id, caption, created_at")
-        .eq("status", "idea")
-        .order("created_at", { ascending: false }),
-      supabase.from("post_photos").select("post_id, photo_id, position"),
-      supabase.from("photos").select("id, storage_path, thumb_path, processed_at").is("deleted_at", null),
-      supabase.from("notes").select("*").order("updated_at", { ascending: false }),
-    ]);
+  const { data: notes, error } = await supabase
+    .from("notes")
+    .select("kind, content_html");
 
   if (error) {
     return (
       <p className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        Could not load ideas: {error.message}
+        Could not load your notes: {error.message}
       </p>
     );
   }
 
-  const photoById = new Map((photos ?? []).map((p) => [p.id, p]));
-
-  const withCovers = (ideas ?? []).map((idea) => ({
-    id: idea.id,
-    caption: idea.caption,
-    created_at: idea.created_at,
-    covers: (links ?? [])
-      .filter((l) => l.post_id === idea.id)
-      .sort((a, b) => a.position - b.position)
-      .map((l) => {
-        const photo = photoById.get(l.photo_id);
-        return photo ? thumbUrl(photo) : null;
-      })
-      .filter((url): url is string => !!url),
-  }));
+  const byKind = new Map((notes ?? []).map((n) => [n.kind, n.content_html]));
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Ideas</h1>
-        <p className="mt-1 max-w-2xl text-sm text-stone-600 dark:text-stone-400">
-          Half-formed thoughts, kept out of the way until they are worth making
-          into a post. Nothing here can ever publish.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight">Notes</h1>
       </div>
 
-      <IdeaList ideas={withCovers} />
-      <Notepad notes={notes ?? []} />
+      <Notebook
+        kind="strategy"
+        label={NOTEBOOK_LABELS.strategy}
+        html={byKind.get("strategy") ?? ""}
+      />
+
+      <Notebook
+        kind="idea_bank"
+        label={NOTEBOOK_LABELS.idea_bank}
+        html={byKind.get("idea_bank") ?? ""}
+      />
     </div>
   );
 }

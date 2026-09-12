@@ -105,10 +105,6 @@ export default async function MediaPage({
 
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Media bank</h1>
-        <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-          Every photo is converted to sRGB at 1440px — the best quality
-          Instagram can display — and the original is discarded.
-        </p>
       </div>
 
       {!inTrash && <UploadZone />}

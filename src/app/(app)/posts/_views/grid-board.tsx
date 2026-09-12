@@ -111,118 +111,202 @@ export function GridBoard({
     return { tile, occupant };
   });
 
+  /*
+   * The same posts as a list, soonest first.
+   *
+   * The grid is three columns wide and the screen is not, so the rest of the
+   * window was empty. What it was missing is the question the grid cannot
+   * answer at a glance — WHEN, and in what order — because the grid reads
+   * newest-first and the queue runs the other way. Reversing `laidOut` turns
+   * one into the other.
+   *
+   * It is the same array, so it follows a drag as it happens: move a tile and
+   * the order beside it moves too, which is what makes the two read as one
+   * thing rather than a grid and a coincidence.
+   */
+  const upcoming = laidOut
+    .filter(({ tile }) => tile.status !== "published")
+    .reverse();
+
   return (
     <div className="space-y-3">
-      {queuedIds.length > 1 && (
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          Drag to arrange, drafts and finished posts alike — this is the
-          layout. Dates land on finished posts only, in order; a draft gets one
-          when you finish it.
-        </p>
-      )}
-
       {error && (
         <p className="rounded border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           {error}
         </p>
       )}
 
-      <div className={pending ? "mx-auto max-w-md opacity-60" : "mx-auto max-w-md"}>
-        <div className="grid grid-cols-3 gap-0.5">
-          {laidOut.map(({ tile, occupant }) => {
-            const draggable = tile.inOrder;
+      <div className="lg:flex lg:items-start lg:gap-8">
+        <div
+          className={
+            pending
+              ? "mx-auto w-full max-w-md opacity-60 lg:mx-0 lg:shrink-0"
+              : "mx-auto w-full max-w-md lg:mx-0 lg:shrink-0"
+          }
+        >
+          {queuedIds.length > 1 && (
+            <p className="mb-2 text-xs text-stone-400 dark:text-stone-500">
+              Drag to arrange.
+            </p>
+          )}
 
-            return (
-              <div
-                key={tile.id}
-                {...(draggable ? itemProps(occupant.id) : {})}
-                className={
-                  draggable
-                    ? dragging === occupant.id
-                      ? "relative aspect-[4/5] cursor-grabbing select-none opacity-40"
-                      : "relative aspect-[4/5] cursor-grab select-none"
-                    : "relative aspect-[4/5]"
-                }
-              >
-                <Link
-                  href={`/posts/${occupant.id}`}
-                  title={`${firstLine(occupant.caption) ?? "No caption"}${
-                    tile.at ? ` — ${formatPacific(tile.at)}` : ""
-                  }`}
-                  className="group block h-full w-full overflow-hidden bg-stone-100 dark:bg-stone-950"
+          <div className="grid grid-cols-3 gap-0.5">
+            {laidOut.map(({ tile, occupant }) => {
+              const draggable = tile.inOrder;
+
+              return (
+                <div
+                  key={tile.id}
+                  {...(draggable ? itemProps(occupant.id) : {})}
+                  className={
+                    draggable
+                      ? dragging === occupant.id
+                        ? "relative aspect-[4/5] cursor-grabbing select-none opacity-40"
+                        : "relative aspect-[4/5] cursor-grab select-none"
+                      : "relative aspect-[4/5]"
+                  }
                 >
-                  {occupant.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={occupant.cover}
-                      alt=""
-                      loading="lazy"
-                      // Never dimmed, published or not. The whole purpose of
-                      // this page is judging how the photos sit together, and
-                      // fading the unpublished ones changes the very thing
-                      // being judged. The status dot says what is planned.
-                      className="h-full w-full object-cover"
+                  <Link
+                    href={`/posts/${occupant.id}`}
+                    title={`${firstLine(occupant.caption) ?? "No caption"}${
+                      tile.at ? ` — ${formatPacific(tile.at)}` : ""
+                    }`}
+                    className="group block h-full w-full overflow-hidden bg-stone-100 dark:bg-stone-950"
+                  >
+                    {occupant.cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={occupant.cover}
+                        alt=""
+                        loading="lazy"
+                        // Never dimmed, published or not. The whole purpose of
+                        // this page is judging how the photos sit together, and
+                        // fading the unpublished ones changes the very thing
+                        // being judged. The status dot says what is planned.
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full items-center justify-center px-2 text-center text-[10px] text-stone-400">
+                        no photo
+                      </span>
+                    )}
+
+                    {occupant.photos > 1 && (
+                      <span className="absolute right-1 top-1 rounded bg-stone-900/70 px-1 text-[9px] font-medium text-white">
+                        ⧉ {occupant.photos}
+                      </span>
+                    )}
+
+                    <StatusDot
+                      status={occupant.status}
+                      ready={occupant.ready}
+                      dryRun={occupant.was_dry_run}
                     />
-                  ) : (
-                    <span className="flex h-full items-center justify-center px-2 text-center text-[10px] text-stone-400">
-                      no photo
+
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-1 pb-0.5 pt-3 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
+                      {tile.at ? formatPacific(tile.at) : "not scheduled yet"}
                     </span>
-                  )}
+                  </Link>
+                </div>
+              );
+            })}
 
-                  {occupant.photos > 1 && (
-                    <span className="absolute right-1 top-1 rounded bg-stone-900/70 px-1 text-[9px] font-medium text-white">
-                      ⧉ {occupant.photos}
-                    </span>
-                  )}
-
-                  <StatusDot
-                    status={occupant.status}
-                    ready={occupant.ready}
-                    dryRun={occupant.was_dry_run}
-                  />
-
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-1 pb-0.5 pt-3 text-[9px] text-white opacity-0 transition group-hover:opacity-100">
-                    {tile.at ? formatPacific(tile.at) : "not scheduled yet"}
-                  </span>
-                </Link>
-              </div>
-            );
-          })}
-
-          {/* Already live. Same grid, same flow — no heading, no row break. */}
-          {live.map((item) => (
-            <a
-              key={item.id}
-              href={item.permalink ?? "#"}
-              target="_blank"
-              rel="noreferrer"
-              title={item.caption ?? `Already on @${username ?? "instagram"}`}
-              className="relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
-            >
-              {/* A reel's media_url is the video file, which no <img> can
+            {/* Already live. Same grid, same flow — no heading, no row break. */}
+            {live.map((item) => (
+              <a
+                key={item.id}
+                href={item.permalink ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                title={item.caption ?? `Already on @${username ?? "instagram"}`}
+                className="relative block aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-950"
+              >
+                {/* A reel's media_url is the video file, which no <img> can
                   show. Its thumbnail_url is the still Instagram puts on the
                   grid, so that comes first. */}
-              {item.media_type === "VIDEO" && (
-                <span
-                  aria-hidden
-                  title="Reel"
-                  className="absolute right-1 top-1 text-[11px] leading-none text-white drop-shadow"
-                >
-                  ▶
-                </span>
-              )}
+                {item.media_type === "VIDEO" && (
+                  <span
+                    aria-hidden
+                    title="Reel"
+                    className="absolute right-1 top-1 text-[11px] leading-none text-white drop-shadow"
+                  >
+                    ▶
+                  </span>
+                )}
 
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.thumbnail_url ?? item.media_url ?? ""}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-            </a>
-          ))}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.thumbnail_url ?? item.media_url ?? ""}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-8 min-w-0 flex-1 lg:mt-0">
+          <UpNext rows={upcoming} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The queue, soonest first, beside the grid it belongs to. */
+function UpNext({ rows }: { rows: Array<{ tile: Tile; occupant: Tile }> }) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div>
+      <h2 className="text-base">Up next</h2>
+
+      <ol className="mt-2 divide-y divide-stone-200 dark:divide-stone-800">
+        {rows.map(({ tile, occupant }, index) => (
+          <li key={tile.id}>
+            <Link
+              href={`/posts/${occupant.id}`}
+              className="flex items-center gap-3 py-2 transition hover:bg-stone-100 dark:hover:bg-stone-900"
+            >
+              <span className="w-4 shrink-0 text-right text-xs tabular-nums text-stone-400 dark:text-stone-500">
+                {index + 1}
+              </span>
+
+              <span className="h-11 w-9 shrink-0 overflow-hidden rounded bg-stone-100 dark:bg-stone-950">
+                {occupant.cover && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={occupant.cover}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">
+                  {firstLine(occupant.caption) ?? (
+                    <span className="italic text-stone-400 dark:text-stone-500">
+                      No caption
+                    </span>
+                  )}
+                </span>
+
+                <span className="mt-0.5 block text-xs text-stone-400 dark:text-stone-500">
+                  {/*
+                    The date belongs to the POSITION, not the post sitting in
+                    it — so a draft shows none, because the day it goes out is
+                    the day it gets finished and nobody knows when that is.
+                  */}
+                  {occupant.ready && tile.at ? formatPacific(tile.at) : "Draft"}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   Hashtag,
@@ -79,6 +79,9 @@ export function Composer({
   const [, startTransition] = useTransition();
 
   const [caption, setCaption] = useState(() => snapshotOf(post).caption);
+
+  // Needed to insert text where the cursor is, rather than only at the end.
+  const captionRef = useRef<HTMLTextAreaElement>(null);
   const [placement, setPlacement] = useState<HashtagPlacement>(
     () => snapshotOf(post).placement,
   );
@@ -168,6 +171,47 @@ export function Composer({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  /*
+   * Text sent over from the notes panel, dropped in at the cursor.
+   *
+   * An event rather than a prop because the panel sits outside this component
+   * — it wraps the whole page so it can split it — and the caption is state in
+   * here. Listening is the small end of that problem.
+   *
+   * Always the owner's own writing, moved from one box to another.
+   */
+  useEffect(() => {
+    const onInsert = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      if (typeof text !== "string" || !text) return;
+
+      const field = captionRef.current;
+
+      // No cursor to speak of if the box was never focused, so it goes on the
+      // end — which is where someone who has not clicked into it would expect.
+      if (!field) {
+        setCaption((current) => (current ? `${current}\n\n${text}` : text));
+        return;
+      }
+
+      const { selectionStart, selectionEnd } = field;
+      setCaption(
+        (current) =>
+          current.slice(0, selectionStart) + text + current.slice(selectionEnd),
+      );
+
+      // Leave the cursor after what was just inserted, so typing carries on
+      // from there rather than jumping to the end.
+      requestAnimationFrame(() => {
+        field.focus();
+        field.setSelectionRange(selectionStart + text.length, selectionStart + text.length);
+      });
+    };
+
+    window.addEventListener("caption:insert", onInsert);
+    return () => window.removeEventListener("caption:insert", onInsert);
+  }, []);
 
   // Ctrl/Cmd+S is the reflex for anyone who has ever used a text editor, and
   // the browser's own save dialog is never what is wanted here.
@@ -298,6 +342,7 @@ export function Composer({
             </div>
 
             <textarea
+              ref={captionRef}
               value={caption}
               onChange={(event) => setCaption(event.target.value)}
               rows={10}

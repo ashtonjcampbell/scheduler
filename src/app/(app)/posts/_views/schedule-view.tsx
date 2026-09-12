@@ -91,11 +91,6 @@ export async function ScheduleView() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-stone-600 dark:text-stone-400">
-        Posts go out in this order, filling your weekly slots. Times are worked
-        out fresh each time — nothing sits with a stale date.
-      </p>
-
       {activeSlots === 0 && (
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
           You have no active posting times, so nothing in the queue can be

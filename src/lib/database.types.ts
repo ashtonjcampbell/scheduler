@@ -155,8 +155,12 @@ export type ScheduleSlot = {
   created_at: string;
 };
 
+/** Exactly two exist, one per kind. Neither can be created or deleted. */
+export type NoteKind = "strategy" | "idea_bank";
+
 export type Note = {
   id: string;
+  kind: NoteKind;
   title: string;
   content: unknown;
   content_html: string;

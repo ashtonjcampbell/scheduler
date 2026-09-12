@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const SECTIONS = [
   { href: "/media", label: "Media" },
   { href: "/posts", label: "Posts" },
-  { href: "/ideas", label: "Ideas" },
+  { href: "/ideas", label: "Notes" },
   { href: "/hashtags", label: "Hashtags" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -15,10 +15,10 @@ export function NavLinks() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-wrap items-center gap-1">
+    <nav className="flex flex-row gap-1 overflow-x-auto md:flex-col md:overflow-visible">
       {SECTIONS.map((section) => {
-        // Every section is a real path now that the overview is gone, so a
-        // prefix match is enough — /posts/<id> should light up Posts.
+        // Every section is a real path, so a prefix match is enough —
+        // /posts/<id> should light up Posts.
         const active = pathname.startsWith(section.href);
 
         return (
@@ -28,8 +28,8 @@ export function NavLinks() {
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "rounded-md bg-stone-200 px-2.5 py-1 text-xs font-medium dark:bg-stone-800"
-                : "rounded-md px-2.5 py-1 text-xs text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-900 dark:hover:text-stone-100"
+                ? "shrink-0 rounded-md bg-stone-200 px-3 py-1.5 text-sm dark:bg-stone-800"
+                : "shrink-0 rounded-md px-3 py-1.5 text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
             }
           >
             {section.label}

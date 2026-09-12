@@ -9,6 +9,11 @@ import { signOut } from "./actions";
  * The signed-in shell. The proxy already redirects anonymous visitors,
  * but this checks again: the proxy can be bypassed by a misconfigured
  * matcher, and a layout guard cannot be.
+ *
+ * A SIDEBAR, like HQ. Sections sit still in the corner of the eye instead of
+ * competing with the page's own heading for the top of the screen — and on a
+ * wide monitor the width is there anyway. Below `md` it folds back to a row,
+ * because a fixed sidebar on a phone is just a smaller phone.
  */
 export default async function AppLayout({
   children,
@@ -26,40 +31,66 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-      <header className="sticky top-0 z-20 border-b border-stone-200 bg-stone-50/85 backdrop-blur dark:border-stone-800 dark:bg-stone-950/85">
-        {/* A fixed height, not padding: anything else that pins itself below
-            this bar needs to know exactly how tall it is. */}
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
-          <span className="text-sm font-semibold tracking-tight">Scheduler</span>
+      <div className="md:flex">
+        <aside className="border-b border-stone-200 px-4 py-3 md:sticky md:top-0 md:h-screen md:w-56 md:shrink-0 md:border-b-0 md:border-r md:px-4 md:py-6 dark:border-stone-800">
+          <div className="flex items-center gap-4 md:block">
+            <span className="font-display shrink-0 text-base md:mb-6 md:block md:px-3">
+              Scheduler
+            </span>
 
-          <NavLinks />
+            <div className="min-w-0 flex-1 md:mt-0">
+              <NavLinks />
+            </div>
+          </div>
 
-          {/* In the sticky bar rather than on the Posts page, because the
-              thought "I should post that" arrives while looking at photos,
-              three screens down, nowhere near a button. */}
-          <form action={createPost} className="ml-auto">
-            <button
-              type="submit"
-              className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
-            >
-              New post
-            </button>
-          </form>
+          {/* Pinned to the bottom of the sidebar on a wide screen: the thought
+              "I should post that" arrives while looking at photos, nowhere
+              near a button, so it has to be reachable from every page. */}
+          <div className="mt-4 hidden md:absolute md:inset-x-4 md:bottom-6 md:mt-0 md:block">
+            <form action={createPost}>
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+              >
+                New post
+              </button>
+            </form>
 
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="text-xs text-stone-500 transition hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
-            >
-              Sign out
-            </button>
-          </form>
+            <form action={signOut} className="mt-3 px-3">
+              <button
+                type="submit"
+                className="text-xs text-stone-400 transition hover:text-stone-900 dark:text-stone-500 dark:hover:text-stone-100"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          {settings?.dry_run !== false && <DryRunBanner />}
+
+          <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+
+          {/* The same two, for the narrow layout where the sidebar is a row. */}
+          <div className="flex items-center gap-4 px-6 pb-8 md:hidden">
+            <form action={createPost}>
+              <button
+                type="submit"
+                className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white dark:bg-stone-100 dark:text-stone-900"
+              >
+                New post
+              </button>
+            </form>
+
+            <form action={signOut}>
+              <button type="submit" className="text-xs text-stone-400 dark:text-stone-500">
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
-      </header>
-
-      {settings?.dry_run !== false && <DryRunBanner />}
-
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      </div>
     </div>
   );
 }

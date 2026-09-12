@@ -154,13 +154,6 @@ export async function GridView() {
 
   return (
     <div className="space-y-5">
-      <p className="max-w-2xl text-sm text-stone-600 dark:text-stone-400">
-        How your profile will look once everything has gone out — newest first,
-        the way Instagram shows it, in the 4:5 tiles it now uses. Your existing
-        posts carry on in the same grid, so you can see the join. Unfinished
-        posts sit at the top, dateless until you finish them.
-      </p>
-
       <p className="text-xs text-stone-500 dark:text-stone-400">
         {upcoming} still to come
         {notReady > 0 && ` · ${notReady} not scheduled yet`}
@@ -198,23 +191,18 @@ export async function GridView() {
       )}
 
       {live.length === 0 && (
-        <p className="mx-auto max-w-md text-center text-xs text-stone-500 dark:text-stone-400">
+        <p className="mx-auto max-w-md text-center text-xs text-stone-400 dark:text-stone-500">
           {mediaError
             ? `Could not read the cached grid: ${mediaError.message}`
             : connected
-              ? `Connected as @${settings?.ig_username}. Your existing posts join this grid after the next publishing run — at most 15 minutes. Reading your grid works whether or not dry run is on.`
-              : "Connect Instagram in Settings and your existing posts will carry on in this grid, below the ones still to come. Reading your grid works whether or not dry run is on."}
+              ? "Your existing posts join this grid within 15 minutes."
+              : "Connect Instagram in Settings to see your existing posts here."}
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-stone-500 dark:text-stone-400">
-        <Legend colour="bg-emerald-500" label="Published" />
-        <Legend colour="bg-sky-500" label="Ready to publish" />
-        <Legend colour="bg-stone-400" label="Draft — will be passed over" />
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full border border-stone-400" />
-          No dot — already on Instagram
-        </span>
+      <div className="flex items-center justify-center gap-4 text-xs text-stone-400 dark:text-stone-500">
+        <Legend colour="bg-sky-500" label="Ready" />
+        <Legend colour="bg-stone-400" label="Draft" />
       </div>
     </div>
   );

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { GridView } from "./_views/grid-view";
 import { ScheduleView } from "./_views/schedule-view";
 import { DraftsView } from "./_views/drafts-view";
-import { NewPostButton } from "./new-post-button";
 
 export const metadata = { title: "Posts" };
 export const dynamic = "force-dynamic";
@@ -69,7 +68,9 @@ export default async function PostsPage({
           {VIEWS.map((option) => (
             <Link
               key={option.key}
-              href={option.key === "grid" ? "/posts" : `/posts?view=${option.key}`}
+              href={
+                option.key === "grid" ? "/posts" : `/posts?view=${option.key}`
+              }
               title={option.hint}
               aria-current={option.key === view ? "page" : undefined}
               className={
@@ -82,10 +83,6 @@ export default async function PostsPage({
             </Link>
           ))}
         </nav>
-
-        <div className="ml-auto">
-          <NewPostButton />
-        </div>
       </div>
 
       {view === "grid" && <GridView />}
