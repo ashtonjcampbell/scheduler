@@ -339,7 +339,6 @@ for (const path of PAGES) {
   const status = run.status;
   const note = run.note;
   const ms = run.ms;
-  const cold = ms;
 
   const ok = (status === 200 || status === 307) && !note;
 
@@ -347,9 +346,8 @@ for (const path of PAGES) {
   else if (ms > SLOW_MS) slow++;
 
   const mark = ok ? (ms > SLOW_MS ? "SLOW" : " ok ") : "FAIL";
-  const spread = "";
   console.log(
-    `  ${mark}  ${String(status).padEnd(3)} ${String(ms).padStart(5)}ms  ${path}${spread}${note ? `  — ${note}` : ""}`,
+    `  ${mark}  ${String(status).padEnd(3)} ${String(ms).padStart(5)}ms  ${path}${note ? `  — ${note}` : ""}`,
   );
 }
 
