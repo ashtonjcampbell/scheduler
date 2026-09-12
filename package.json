@@ -21,7 +21,8 @@
     "verify:shape": "tsx scripts/verify-shape.ts",
     "verify:retry": "tsx scripts/verify-retry.ts",
     "verify:new-post": "tsx scripts/verify-new-post.ts",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "cpu": "node scripts/cpu.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
