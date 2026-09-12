@@ -16,8 +16,8 @@ import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
 import { updatePost, setPostPhotos, setPostHashtags } from "../actions";
 import { PhotoPicker } from "./photo-picker";
 import { HashtagPanel, type PickedTag } from "./hashtag-panel";
-import { SchedulePanel } from "./schedule-panel";
-import { PostHeader } from "./post-header";
+import { WhenBar } from "./when-bar";
+import { PostActions } from "./post-actions";
 import { TagEditor } from "./tag-editor";
 import { CropEditor } from "../../media/crop-editor";
 import { carouselShape, describeShape } from "@/lib/shape";
@@ -196,16 +196,34 @@ export function Composer({
       }
 
       const { selectionStart, selectionEnd } = field;
-      setCaption(
-        (current) =>
-          current.slice(0, selectionStart) + text + current.slice(selectionEnd),
-      );
+
+      setCaption((current) => {
+        const before = current.slice(0, selectionStart);
+        const after = current.slice(selectionEnd);
+
+        /*
+         * Keep it off the neighbours.
+         *
+         * Dropped in raw, a line landed as "…for ten minutes.The details often"
+         * — one thought welded to the next. A note is a whole thought, so it
+         * gets a line of its own unless there is already a break there.
+         */
+        const lead = before && !/\s$/.test(before) ? "\n" : "";
+        const trail = after && !/^\s/.test(after) ? "\n" : "";
+
+        return before + lead + text + trail + after;
+      });
 
       // Leave the cursor after what was just inserted, so typing carries on
       // from there rather than jumping to the end.
+      const landed =
+        selectionStart +
+        text.length +
+        (selectionStart > 0 && !/\s$/.test(field.value.slice(0, selectionStart)) ? 1 : 0);
+
       requestAnimationFrame(() => {
         field.focus();
-        field.setSelectionRange(selectionStart + text.length, selectionStart + text.length);
+        field.setSelectionRange(landed, landed);
       });
     };
 
@@ -268,21 +286,160 @@ export function Composer({
     (effectiveTags.length < guide.min || effectiveTags.length > guide.max);
 
   return (
-    <div className="space-y-5">
-      {/* No title field. It was an internal name that never left the app, and
-          the caption's first line already identifies a post everywhere one
-          needs identifying — so it was a box to fill in for nothing. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="mr-auto" />
-        <SaveIndicator state={saveState} dirty={dirty} />
+    <div className="mx-auto max-w-2xl">
+      {/*
+        WHEN COMES FIRST. It used to be a banner at the top with one button and
+        a panel at the bottom with two more — one decision in three places. It
+        is also the honest order: whether this goes out on Thursday or sits as
+        a draft changes how it gets written.
+      */}
+      <WhenBar
+        post={post}
+        photoCount={photoIds.length}
+        hasCaption={caption.trim().length > 0}
+        hashtagCount={effectiveTags.length}
+        shapeProblem={shapeProblem}
+        unsaved={dirty}
+      />
 
+      {error && (
+        <p className="mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+          {error}
+        </p>
+      )}
+
+      {/* Sections are separated by rules rather than boxed as cards. Every one
+          being a bordered panel meant nothing looked more important than
+          anything else. */}
+      <section className="border-b border-stone-200 py-6 dark:border-stone-800">
+        <PhotoPicker
+          photos={libraryPhotos}
+          usageById={usageById}
+          selected={photoIds}
+          onChange={setPhotoIds}
+          tagCounts={tagCounts}
+          onTag={setTagging}
+          onCrop={setCropping}
+        />
+      </section>
+
+      <section className="border-b border-stone-200 py-6 dark:border-stone-800">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-base">Caption</h2>
+          <span
+            className={
+              plan.overBy > 0
+                ? "ml-auto text-xs font-medium tabular-nums text-red-600 dark:text-red-400"
+                : plan.captionRemaining < 150
+                  ? "ml-auto text-xs tabular-nums text-amber-600 dark:text-amber-400"
+                  : "ml-auto text-xs tabular-nums text-stone-400 dark:text-stone-500"
+            }
+          >
+            {plan.captionLength.toLocaleString()} / {CAPTION_LIMIT.toLocaleString()}
+            {plan.overBy > 0 && " · " + plan.overBy + " over"}
+          </span>
+        </div>
+
+        {/*
+          No border on the box. The caption is the page rather than a field on
+          a form, and a rule under the heading is enough to say where it starts.
+        */}
+        <textarea
+          ref={captionRef}
+          value={caption}
+          onChange={(event) => setCaption(event.target.value)}
+          rows={9}
+          placeholder="Write the caption…"
+          className="mt-3 w-full resize-y bg-transparent text-sm leading-relaxed outline-none placeholder:text-stone-400 dark:placeholder:text-stone-500"
+        />
+
+        {/*
+          The whole caption used to be reprinted below under "Exactly what gets
+          posted". Reading the same words twice is noise, and the box above is
+          already exactly what gets posted. What is NOT visible in it is the
+          part that goes somewhere else — so that is all that is shown.
+        */}
+        {placement === "first_comment" && plan.firstComment && (
+          <div className="mt-4 border-t border-stone-200 pt-3 dark:border-stone-800">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+              First comment
+            </h3>
+            <p className="mt-1.5 break-words text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+              {plan.firstComment}
+            </p>
+          </div>
+        )}
+
+        {placement === "caption" && appended.length > 0 && (
+          <div className="mt-4 border-t border-stone-200 pt-3 dark:border-stone-800">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+              Added to the end of the caption
+            </h3>
+            <p className="mt-1.5 break-words text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+              {appended.map((tag) => "#" + tag).join(" ")}
+            </p>
+          </div>
+        )}
+
+        {plan.overBy > 0 && (
+          <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+            {plan.overBy} characters over Instagram&rsquo;s limit — it will be
+            refused as it stands.
+          </p>
+        )}
+      </section>
+
+      <section className="border-b border-stone-200 py-6 dark:border-stone-800">
+        <HashtagPanel
+          library={library}
+          categories={categories}
+          picked={picked}
+          onChange={setPicked}
+          inlineTags={inline}
+          defaultCounts={defaultCounts}
+        />
+
+        {/* Placement reads as a sentence, because it is a setting changed
+            about once a year rather than a panel of its own. */}
+        <p className="mt-3 text-xs text-stone-400 dark:text-stone-500">
+          {placement === "first_comment"
+            ? "Going in the first comment, so they do not count toward the caption."
+            : "Going in the caption, so they count toward the 2,200 characters."}{" "}
+          <button
+            type="button"
+            onClick={() =>
+              setPlacement(placement === "caption" ? "first_comment" : "caption")
+            }
+            className="underline underline-offset-2 hover:text-stone-900 dark:hover:text-stone-100"
+          >
+            {placement === "first_comment" ? "Put them in the caption" : "Move to first comment"}
+          </button>
+        </p>
+
+        {tooManyTags && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            {effectiveTags.length} hashtags — Instagram allows {MAX_HASHTAGS_PER_POST}.
+          </p>
+        )}
+
+        {!tooManyTags && outsideGuide && (
+          <p className="mt-2 text-xs text-stone-400 dark:text-stone-500">
+            You usually use {guide.min}–{guide.max} — not a rule, just a nudge.
+          </p>
+        )}
+      </section>
+
+      {/* Save and discard sit at the end, where you finish. The unsaved state
+          is also announced at the top by WhenBar, because that is where it
+          stops you publishing. */}
+      <div className="flex items-center gap-3 py-5">
         <button
           type="button"
           disabled={!dirty || saveState === "saving"}
           onClick={() => void save()}
-          className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+          className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
         >
-          Save
+          {saveState === "saving" ? "Saving…" : "Save"}
         </button>
 
         <button
@@ -295,181 +452,19 @@ export function Composer({
         >
           Discard
         </button>
+
+        <span className="text-xs text-stone-400 dark:text-stone-500">
+          {dirty
+            ? "Unsaved changes"
+            : saveState === "saved"
+              ? "Saved"
+              : "Everything saved"}
+        </span>
       </div>
 
-      <PostHeader
-        post={post}
-        photoCount={photoIds.length}
-        hasCaption={caption.trim().length > 0}
-        hashtagCount={effectiveTags.length}
-        shapeProblem={shapeProblem}
-        unsaved={dirty}
-      />
+      <PostActions post={post} />
 
-      {error && (
-        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-          {error}
-        </p>
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-5">
-          <PhotoPicker
-            photos={libraryPhotos}
-            usageById={usageById}
-            selected={photoIds}
-            onChange={setPhotoIds}
-            tagCounts={tagCounts}
-            onTag={setTagging}
-            onCrop={setCropping}
-          />
-
-          <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-semibold">Caption</h2>
-              <span
-                className={
-                  plan.overBy > 0
-                    ? "text-xs font-medium tabular-nums text-red-600 dark:text-red-400"
-                    : plan.captionRemaining < 150
-                      ? "text-xs tabular-nums text-amber-600 dark:text-amber-400"
-                      : "text-xs tabular-nums text-stone-500 dark:text-stone-400"
-                }
-              >
-                {plan.captionLength.toLocaleString()} / {CAPTION_LIMIT.toLocaleString()}
-                {plan.overBy > 0 && ` · ${plan.overBy} over`}
-              </span>
-            </div>
-
-            <textarea
-              ref={captionRef}
-              value={caption}
-              onChange={(event) => setCaption(event.target.value)}
-              rows={10}
-              placeholder="Write the caption…"
-              className="mt-3 w-full resize-y rounded-lg border border-stone-300 bg-white p-3 text-sm leading-relaxed outline-none focus:border-stone-500 dark:border-stone-700 dark:bg-stone-950"
-            />
-
-            <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-              Instagram captions are plain text — line breaks work, bold and
-              italic do not.
-              {placement === "caption" && appended.length > 0 && (
-                <> Hashtags are counted above because they go in the caption.</>
-              )}
-              {placement === "first_comment" && appended.length > 0 && (
-                <> Hashtags are not counted above — they go in the first comment.</>
-              )}
-            </p>
-
-            {/*
-              The whole caption used to be reprinted below this box under
-              "Exactly what gets posted". Reading the same words twice is noise,
-              and the box above is already exactly what gets posted.
-
-              What is NOT visible in the box is the part that goes somewhere
-              else — so that is all that is shown, right where it belongs.
-            */}
-            {placement === "first_comment" && plan.firstComment && (
-              <div className="mt-3 border-t border-stone-200 pt-3 dark:border-stone-800">
-                <h3 className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-                  First comment
-                </h3>
-                <p className="mt-1.5 break-words rounded-lg bg-stone-50 p-2.5 text-sm leading-relaxed dark:bg-stone-950">
-                  {plan.firstComment}
-                </p>
-              </div>
-            )}
-
-            {placement === "caption" && appended.length > 0 && (
-              <div className="mt-3 border-t border-stone-200 pt-3 dark:border-stone-800">
-                <h3 className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-                  Added to the end of the caption
-                </h3>
-                <p className="mt-1.5 break-words rounded-lg bg-stone-50 p-2.5 text-sm leading-relaxed dark:bg-stone-950">
-                  {appended.map((tag) => `#${tag}`).join(" ")}
-                </p>
-              </div>
-            )}
-
-            {plan.overBy > 0 && (
-              <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-                {plan.overBy} characters over Instagram&rsquo;s limit — it will
-                be refused as it stands.
-              </p>
-            )}
-          </section>
-        </div>
-
-        <div className="space-y-5">
-          <SchedulePanel
-            post={post}
-            photoCount={photoIds.length}
-            hasCaption={caption.trim().length > 0}
-            hashtagCount={effectiveTags.length}
-            shapeProblem={shapeProblem}
-            unsaved={dirty}
-          />
-
-          <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-            <h2 className="text-sm font-semibold">Where hashtags go</h2>
-            <div className="mt-3 space-y-2">
-              {(
-                [
-                  ["caption", "In the caption", "Counts toward the 2,200 characters."],
-                  [
-                    "first_comment",
-                    "As the first comment",
-                    "Posted immediately after publishing. Keeps the caption clean.",
-                  ],
-                ] as const
-              ).map(([value, label, hint]) => (
-                <label key={value} className="flex cursor-pointer gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="placement"
-                    checked={placement === value}
-                    onChange={() => setPlacement(value)}
-                    className="mt-0.5 accent-stone-900 dark:accent-stone-100"
-                  />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    <span className="block text-xs text-stone-500 dark:text-stone-400">
-                      {hint}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </section>
-
-          <HashtagPanel
-            library={library}
-            categories={categories}
-            picked={picked}
-            onChange={setPicked}
-            inlineTags={inline}
-            guide={guide}
-            defaultCounts={defaultCounts}
-          />
-
-          {tooManyTags && (
-            <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-              {effectiveTags.length} hashtags — Instagram allows{" "}
-              {MAX_HASHTAGS_PER_POST}.
-            </p>
-          )}
-
-          {!tooManyTags && outsideGuide && (
-            <p className="rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
-              {effectiveTags.length} hashtags. You usually use {guide.min}–{guide.max}
-              {" "}— not a rule, just a nudge.
-            </p>
-          )}
-        </div>
-      </div>
-      {cropping && (
-        <CropEditor photo={cropping} onClose={() => setCropping(null)} />
-      )}
+      {cropping && <CropEditor photo={cropping} onClose={() => setCropping(null)} />}
 
       {tagging && (
         <TagEditor
@@ -480,42 +475,5 @@ export function Composer({
         />
       )}
     </div>
-  );
-}
-
-/**
- * The exact text that will be sent, rendered from the same function the
- * publishing worker uses — so this cannot drift from what actually goes out.
- */
-function SaveIndicator({
-  state,
-  dirty,
-}: {
-  state: "idle" | "saving" | "saved" | "error";
-  dirty: boolean;
-}) {
-  if (state === "saving") {
-    return <span className="text-xs text-stone-500 dark:text-stone-400">Saving…</span>;
-  }
-
-  if (state === "error") {
-    return <span className="text-xs text-red-600 dark:text-red-400">Not saved</span>;
-  }
-
-  // Unsaved beats a stale "Saved": once edited again, the last save is no
-  // longer what this post says.
-  if (dirty) {
-    return (
-      <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-        Unsaved changes
-      </span>
-    );
-  }
-
-  // Says so even before anything has been edited. A greyed-out Save button with
-  // no explanation reads as broken rather than as "there is nothing to save",
-  // and the obvious wrong guess is that something else is blocking it.
-  return (
-    <span className="text-xs text-stone-500 dark:text-stone-400">All changes saved</span>
   );
 }

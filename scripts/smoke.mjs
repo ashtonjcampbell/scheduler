@@ -148,17 +148,47 @@ async function signIn() {
   return parts.join("; ");
 }
 
+/**
+ * One real post, so the composer is checked too.
+ *
+ * It is the most-used screen in the app and the one most often changed, and
+ * until now the smoke test could not see it: every other page has a fixed
+ * path, and this one needs an id. A page the test never opens is a page it
+ * cannot vouch for — which is exactly how a broken build once passed.
+ */
+async function findAPost() {
+  const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const { data } = await supabase
+    .from("posts")
+    .select("id")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  return data?.[0]?.id ?? null;
+}
+
 const cookies = await signIn();
+
+const postId = await findAPost();
+if (postId) PAGES.push(`/posts/${postId}`);
+else console.log("  (no posts yet — the composer is not covered this run)");
+
 console.log(`\nsigned in · checking ${PAGES.length} pages on ${base}\n`);
 
 let failed = 0;
 let slow = 0;
 
-for (const path of PAGES) {
+/**
+ * Load a page once and say what happened.
+ *
+ * Cloudflare's own error pages come back as 5xx HTML that says nothing useful
+ * in the status alone, so the body is worth reading.
+ */
+async function hit(path) {
   const started = Date.now();
-
-  let status = 0;
-  let note = "";
 
   try {
     const response = await fetch(`${base}${path}`, {
@@ -166,27 +196,64 @@ for (const path of PAGES) {
       redirect: "manual",
     });
 
-    status = response.status;
     const body = await response.text();
 
-    // Cloudflare's own error pages come back as 5xx HTML that says nothing
-    // useful in the status alone, so the body is worth reading.
-    if (body.includes("Worker exceeded resource limits")) note = "CPU limit";
-    else if (body.includes("Internal Server Error")) note = "server error";
-    else if (body.includes("Application error")) note = "client error";
-  } catch (error) {
-    note = error instanceof Error ? error.message : String(error);
-  }
+    const note = body.includes("Worker exceeded resource limits")
+      ? "CPU limit"
+      : body.includes("Internal Server Error")
+        ? "server error"
+        : body.includes("Application error")
+          ? "client error"
+          : "";
 
-  const ms = Date.now() - started;
-  const ok = (status === 200 || status === 307) && !note;
+    return { status: response.status, note, ms: Date.now() - started };
+  } catch (error) {
+    return {
+      status: 0,
+      note: error instanceof Error ? error.message : String(error),
+      ms: Date.now() - started,
+    };
+  }
+}
+
+for (const path of PAGES) {
+  /*
+   * THREE SAMPLES, and the middle one reported.
+   *
+   * The first request to a page pays Cloudflare's cold start — four hundred
+   * milliseconds of Next.js booting that has nothing to do with the page. A
+   * single timing therefore says more about who visited last than about the
+   * work the page does, which made the numbers useless for spotting a page
+   * getting heavier. The median of three is about the warm cost.
+   *
+   * It is still wall-clock, not CPU, and Cloudflare bills CPU: most of what is
+   * measured here is waiting on Supabase, which costs nothing. Treat it as
+   * "which page does the most work", not as the bill. The real CPU figure is
+   * on the Workers dashboard.
+   */
+  const runs = [];
+  for (let i = 0; i < 3; i++) runs.push(await hit(path));
+
+  const worked = runs.filter((r) => (r.status === 200 || r.status === 307) && !r.note);
+  const sorted = [...runs].sort((a, b) => a.ms - b.ms);
+  const middle = sorted[1];
+
+  const status = middle.status;
+  const note = runs.find((r) => r.note)?.note ?? "";
+  const ms = middle.ms;
+  const cold = Math.max(...runs.map((r) => r.ms));
+
+  // One bad response out of three is still a failure worth seeing: an
+  // intermittent CPU limit is exactly the thing that is hard to catch.
+  const ok = worked.length === runs.length;
 
   if (!ok) failed++;
   else if (ms > SLOW_MS) slow++;
 
   const mark = ok ? (ms > SLOW_MS ? "SLOW" : " ok ") : "FAIL";
+  const spread = cold > ms * 2 ? `  (cold ${cold}ms)` : "";
   console.log(
-    `  ${mark}  ${String(status).padEnd(3)} ${String(ms).padStart(5)}ms  ${path}${note ? `  — ${note}` : ""}`,
+    `  ${mark}  ${String(status).padEnd(3)} ${String(ms).padStart(5)}ms  ${path}${spread}${note ? `  — ${note}` : ""}`,
   );
 }
 

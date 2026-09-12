@@ -55,22 +55,21 @@ export function PhotoPicker({
   });
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">
-          Photos{" "}
-          <span className="font-normal text-stone-500 dark:text-stone-400">
-            {selected.length} of {MAX_CAROUSEL}
-          </span>
-        </h2>
+    <section>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h2 className="text-base">Photos</h2>
 
         <button
           type="button"
           onClick={() => setBrowsing((v) => !v)}
-          className="text-xs font-medium text-stone-600 underline-offset-2 hover:underline dark:text-stone-300"
+          className="text-xs text-stone-500 underline underline-offset-2 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
         >
           {browsing ? "Done choosing" : "Choose photos"}
         </button>
+
+        <span className="ml-auto text-xs tabular-nums text-stone-400 dark:text-stone-500">
+          {selected.length} of {MAX_CAROUSEL}
+        </span>
       </div>
 
       {selected.length === 0 ? (
@@ -78,7 +77,7 @@ export function PhotoPicker({
           No photos yet.
         </p>
       ) : (
-        <ol className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+        <ol className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {chosen.map((photo, index) => (
             <li
               key={photo.id}

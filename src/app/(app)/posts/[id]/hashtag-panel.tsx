@@ -19,7 +19,6 @@ export function HashtagPanel({
   picked,
   onChange,
   inlineTags,
-  guide,
   defaultCounts,
 }: {
   library: Hashtag[];
@@ -28,7 +27,6 @@ export function HashtagPanel({
   onChange: (tags: PickedTag[]) => void;
   /** Hashtags typed into the caption body — shown so the count makes sense. */
   inlineTags: string[];
-  guide: { min: number; max: number };
   /** The saved default mix, so a new post opens ready to shuffle. */
   defaultCounts: Record<string, number>;
 }) {
@@ -186,29 +184,33 @@ export function HashtagPanel({
     });
   };
 
+  // The mix and the library, folded away. Set once and touched rarely, but
+  // permanently on screen it was most of what the composer showed.
+  const [showMix, setShowMix] = useState(false);
+
   const effectiveCount = picked.length + inlineTags.filter(
     (t) => !picked.some((p) => p.tag.toLowerCase() === t.toLowerCase()),
   ).length;
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">Hashtags</h2>
+    <section>
+      <div className="flex items-baseline gap-3">
+        <h2 className="text-base">Hashtags</h2>
         <span
           className={
             effectiveCount > MAX_HASHTAGS_PER_POST
-              ? "text-xs font-medium tabular-nums text-red-600 dark:text-red-400"
-              : "text-xs tabular-nums text-stone-500 dark:text-stone-400"
+              ? "ml-auto text-xs font-medium tabular-nums text-red-600 dark:text-red-400"
+              : "ml-auto text-xs tabular-nums text-stone-400 dark:text-stone-500"
           }
         >
-          {effectiveCount} · aim {guide.min}–{guide.max}
+          {effectiveCount} {effectiveCount === 1 ? "tag" : "tags"}
         </span>
       </div>
 
       {/* --- the chosen set ------------------------------------------------ */}
       {picked.length === 0 && inlineTags.length === 0 ? (
-        <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">
-          None yet. Shuffle from your library below, or type your own.
+        <p className="mt-3 text-sm text-stone-400 dark:text-stone-500">
+          None yet. Shuffle from your library, or type your own.
         </p>
       ) : (
         <ul className="mt-3 flex flex-wrap gap-1.5">
@@ -220,8 +222,8 @@ export function HashtagPanel({
                 key={entry.tag.toLowerCase()}
                 className={
                   isLocked
-                    ? "flex items-center gap-1 rounded-full border border-stone-900 bg-stone-100 py-0.5 pl-2 pr-1 text-xs dark:border-stone-100 dark:bg-stone-800"
-                    : "flex items-center gap-1 rounded-full border border-stone-300 py-0.5 pl-2 pr-1 text-xs dark:border-stone-700"
+                    ? "flex items-center gap-1 rounded-full bg-emerald-500/15 py-0.5 pl-2.5 pr-1 text-xs text-emerald-700 dark:text-emerald-400"
+                    : "flex items-center gap-1 rounded-full bg-stone-100 py-0.5 pl-2.5 pr-1 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-300"
                 }
               >
                 <span className={entry.hashtagId ? "" : "italic"}>#{entry.tag}</span>
@@ -231,16 +233,22 @@ export function HashtagPanel({
                     <button
                       type="button"
                       onClick={() => toggleLock(entry.hashtagId)}
-                      title={isLocked ? "Unlock — allow reshuffling" : "Lock — keep through a shuffle"}
-                      className="text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                      title={
+                        isLocked
+                          ? "Pinned — kept through a shuffle"
+                          : "Pin, to keep it through a shuffle"
+                      }
+                      aria-label={isLocked ? "Unpin this tag" : "Pin this tag"}
+                      className="px-0.5 opacity-60 hover:opacity-100"
                     >
-                      {isLocked ? "🔒" : "🔓"}
+                      {isLocked ? "📌" : "○"}
                     </button>
                     <button
                       type="button"
                       onClick={() => reroll(entry)}
                       title="Swap for another from the same category"
-                      className="text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                      aria-label={"Swap #" + entry.tag}
+                      className="px-0.5 opacity-60 hover:opacity-100"
                     >
                       ↻
                     </button>
@@ -250,8 +258,8 @@ export function HashtagPanel({
                 <button
                   type="button"
                   onClick={() => removeTag(entry)}
-                  aria-label={`Remove #${entry.tag}`}
-                  className="text-stone-400 hover:text-red-600 dark:hover:text-red-400"
+                  aria-label={"Remove #" + entry.tag}
+                  className="px-0.5 opacity-60 hover:text-red-600 hover:opacity-100 dark:hover:text-red-400"
                 >
                   ×
                 </button>
@@ -263,9 +271,9 @@ export function HashtagPanel({
             .filter((t) => !picked.some((p) => p.tag.toLowerCase() === t.toLowerCase()))
             .map((tag) => (
               <li
-                key={`inline-${tag.toLowerCase()}`}
+                key={"inline-" + tag.toLowerCase()}
                 title="Typed in the caption"
-                className="rounded-full border border-dashed border-stone-300 px-2 py-0.5 text-xs text-stone-500 dark:border-stone-700 dark:text-stone-400"
+                className="rounded-full border border-dashed border-stone-300 px-2.5 py-0.5 text-xs text-stone-400 dark:border-stone-700 dark:text-stone-500"
               >
                 #{tag}
               </li>
@@ -273,123 +281,137 @@ export function HashtagPanel({
         </ul>
       )}
 
-      {/* --- type your own ------------------------------------------------- */}
-      <div className="mt-3 flex gap-1.5">
-        <input
-          value={oneOff}
-          onChange={(event) => setOneOff(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              addOneOff();
-            }
-          }}
-          placeholder="Add your own…"
-          className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1 text-xs outline-none focus:border-stone-500 dark:border-stone-700 dark:bg-stone-950"
-        />
-        <button
-          type="button"
-          onClick={addOneOff}
-          disabled={!normaliseTag(oneOff)}
-          className="rounded-lg border border-stone-300 px-2 py-1 text-xs font-medium disabled:opacity-40 dark:border-stone-700"
-        >
-          Add
-        </button>
-      </div>
-
-      {/* --- shuffle ------------------------------------------------------- */}
-      <div className="mt-4 border-t border-stone-200 pt-3 dark:border-stone-800">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          Shuffle from library
-        </h3>
-
-        <ul className="mt-2 space-y-1">
-          {categories.map((category) => {
-            const available = availableIn(category.id);
-            const value = counts[category.id] ?? 0;
-
-            return (
-              <li key={category.id} className="flex items-center gap-2 text-xs">
-                <span className="flex-1 truncate">{category.name}</span>
-                <span className="tabular-nums text-stone-400 dark:text-stone-500">
-                  {available}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setCount(category.id, value - 1)}
-                    disabled={value === 0}
-                    aria-label={`One fewer from ${category.name}`}
-                    className="h-5 w-5 rounded border border-stone-300 disabled:opacity-30 dark:border-stone-700"
-                  >
-                    −
-                  </button>
-                  <span className="w-4 text-center tabular-nums">{value}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCount(category.id, value + 1)}
-                    disabled={value >= available}
-                    aria-label={`One more from ${category.name}`}
-                    className="h-5 w-5 rounded border border-stone-300 disabled:opacity-30 dark:border-stone-700"
-                  >
-                    +
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-
-        <label className="mt-3 flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
-          Skip tags bigger than
-          <input
-            type="number"
-            value={maxPosts}
-            onChange={(event) => setMaxPosts(event.target.value)}
-            placeholder="any"
-            min={0}
-            step={100000}
-            className="w-24 rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs dark:border-stone-700 dark:bg-stone-950"
-          />
-          posts
-        </label>
-
+      {/* --- shuffle, kept in reach ---------------------------------------- */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
           type="button"
           onClick={shuffle}
           disabled={total === 0}
-          className="mt-3 w-full rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+          className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-stone-700"
         >
-          {total === 0 ? "Choose how many" : `Shuffle ${total}`}
+          {total === 0 ? "Choose how many" : "Shuffle " + total}
         </button>
-
-        {shortfall && (
-          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{shortfall}</p>
-        )}
 
         <button
           type="button"
-          disabled={savingDefault || sameAsDefault}
-          onClick={() =>
-            startSavingDefault(async () => {
-              await saveDefaultMix(counts);
-              setCurrentDefault(counts);
-            })
-          }
-          className="mt-2 text-[11px] text-stone-500 underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50 dark:text-stone-400"
+          aria-expanded={showMix}
+          onClick={() => setShowMix((open) => !open)}
+          className="text-xs text-stone-500 underline underline-offset-2 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
         >
-          {savingDefault
-            ? "Saving…"
-            : sameAsDefault
-              ? "This is your default for new posts"
-              : "Make this the default for new posts"}
+          {showMix ? "Done" : "Mix & library"}
         </button>
 
-        <p className="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
-          Picked at random from your own library. Lock the ones you want to
-          keep, then shuffle again.
-        </p>
+        <span className="text-xs text-stone-400 dark:text-stone-500">
+          Picked at random from your own library. Pin any you want to keep.
+        </span>
       </div>
+
+      {shortfall && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{shortfall}</p>
+      )}
+
+      {/* --- the mix, folded away ------------------------------------------ */}
+      {showMix && (
+        <div className="mt-3 rounded-lg border border-stone-200 p-3.5 dark:border-stone-800">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+            How many from each
+          </h3>
+
+          <ul className="mt-2 space-y-1">
+            {categories.map((category) => {
+              const available = availableIn(category.id);
+              const value = counts[category.id] ?? 0;
+
+              return (
+                <li key={category.id} className="flex items-center gap-2 text-xs">
+                  <span className="flex-1 truncate">{category.name}</span>
+                  <span className="tabular-nums text-stone-400 dark:text-stone-500">
+                    {available}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCount(category.id, value - 1)}
+                      disabled={value === 0}
+                      aria-label={"One fewer from " + category.name}
+                      className="h-5 w-5 rounded border border-stone-300 disabled:opacity-30 dark:border-stone-700"
+                    >
+                      −
+                    </button>
+                    <span className="w-4 text-center tabular-nums">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCount(category.id, value + 1)}
+                      disabled={value >= available}
+                      aria-label={"One more from " + category.name}
+                      className="h-5 w-5 rounded border border-stone-300 disabled:opacity-30 dark:border-stone-700"
+                    >
+                      +
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <label className="mt-3 flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+            Skip tags bigger than
+            <input
+              type="number"
+              value={maxPosts}
+              onChange={(event) => setMaxPosts(event.target.value)}
+              placeholder="any"
+              min={0}
+              step={100000}
+              className="w-24 rounded border border-stone-300 bg-white px-1.5 py-0.5 text-xs dark:border-stone-700 dark:bg-stone-950"
+            />
+            posts
+          </label>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-stone-200 pt-3 dark:border-stone-800">
+            <div className="flex min-w-0 flex-1 gap-1.5">
+              <input
+                value={oneOff}
+                onChange={(event) => setOneOff(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addOneOff();
+                  }
+                }}
+                placeholder="Add your own…"
+                className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1 text-xs outline-none focus:border-stone-500 dark:border-stone-700 dark:bg-stone-950"
+              />
+              <button
+                type="button"
+                onClick={addOneOff}
+                disabled={!normaliseTag(oneOff)}
+                className="rounded-lg border border-stone-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-stone-700"
+              >
+                Add
+              </button>
+            </div>
+
+            <button
+              type="button"
+              disabled={savingDefault || sameAsDefault}
+              onClick={() =>
+                startSavingDefault(async () => {
+                  await saveDefaultMix(counts);
+                  setCurrentDefault(counts);
+                })
+              }
+              className="text-[11px] text-stone-500 underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50 dark:text-stone-400"
+            >
+              {savingDefault
+                ? "Saving…"
+                : sameAsDefault
+                  ? "This is your default"
+                  : "Make this the default"}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

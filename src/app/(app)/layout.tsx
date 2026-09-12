@@ -4,6 +4,7 @@ import { NavLinks } from "@/components/nav-links";
 import { createPost } from "./posts/actions";
 import { DryRunBanner } from "@/components/dry-run-banner";
 import { signOut } from "./actions";
+import { Strip } from "./strip";
 
 /**
  * The signed-in shell. The proxy already redirects anonymous visitors,
@@ -67,6 +68,10 @@ export default async function AppLayout({
           </div>
         </aside>
 
+        {/* Reference, beside the work rather than instead of it. Lives here
+            so it is fetched once and survives moving between pages. */}
+        <Strip />
+
         <div className="min-w-0 flex-1">
           {settings?.dry_run !== false && <DryRunBanner />}
 
@@ -84,7 +89,10 @@ export default async function AppLayout({
             </form>
 
             <form action={signOut}>
-              <button type="submit" className="text-xs text-stone-400 dark:text-stone-500">
+              <button
+                type="submit"
+                className="text-xs text-stone-400 dark:text-stone-500"
+              >
                 Sign out
               </button>
             </form>

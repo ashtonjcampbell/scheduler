@@ -163,6 +163,43 @@ export async function setReady(
 ): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
 
+  /*
+   * Making a post a draft gives up its pinned time.
+   *
+   * A pinned time is a promise about an instant, and a draft is a post that is
+   * not going out — keeping both left a dead appointment sitting on the row:
+   * the grid drew the post at a date it would never publish, and queueing it
+   * again weeks later would have restored a time long past. It goes back to
+   * the end of the running order, which is where an unfinished post belongs.
+   */
+  if (!ready) {
+    const { data: current } = await supabase
+      .from("posts")
+      .select("status")
+      .eq("id", postId)
+      .single();
+
+    if (current?.status === "scheduled") {
+      const { data: last } = await supabase
+        .from("posts")
+        .select("queue_position")
+        .not("queue_position", "is", null)
+        .order("queue_position", { ascending: false })
+        .limit(1);
+
+      await supabase
+        .from("posts")
+        .update({
+          status: "preview_draft",
+          scheduled_for: null,
+          slot_id: null,
+          schedule_mode: "queue",
+          queue_position: (last?.[0]?.queue_position ?? -1) + 1,
+        })
+        .eq("id", postId);
+    }
+  }
+
   // Being in the plan is not the same as being in the queue, but a post has
   // to be somewhere in the order before it can take a turn. Anything without a
   // place gets one at the end.

@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Composer } from "./composer";
-import { ReferenceDock } from "./reference-dock";
 
 export const metadata = { title: "Compose" };
 export const dynamic = "force-dynamic";
@@ -106,25 +105,23 @@ export default async function ComposePage({
         </Link>
       </div>
 
-      <ReferenceDock>
-        <Composer
-          post={{
-            ...post.data,
-            post_photos: postPhotos.data ?? [],
-            post_hashtags: postTags.data ?? [],
-            photo_tags: photoTags.data ?? [],
-          }}
-          libraryPhotos={libraryPhotos}
-          usage={tags.data ?? []}
-          library={library.data ?? []}
-          categories={categories.data ?? []}
-          guide={{
-            min: settings.data?.hashtag_min ?? 3,
-            max: settings.data?.hashtag_max ?? 10,
-          }}
-          defaultCounts={defaultCounts}
-        />
-      </ReferenceDock>
+      <Composer
+        post={{
+          ...post.data,
+          post_photos: postPhotos.data ?? [],
+          post_hashtags: postTags.data ?? [],
+          photo_tags: photoTags.data ?? [],
+        }}
+        libraryPhotos={libraryPhotos}
+        usage={tags.data ?? []}
+        library={library.data ?? []}
+        categories={categories.data ?? []}
+        guide={{
+          min: settings.data?.hashtag_min ?? 3,
+          max: settings.data?.hashtag_max ?? 10,
+        }}
+        defaultCounts={defaultCounts}
+      />
     </div>
   );
 }
