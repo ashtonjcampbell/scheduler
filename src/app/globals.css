@@ -34,6 +34,32 @@
   src: url("/fonts/young-serif-latin.woff2") format("woff2");
 }
 
+/*
+ * Dark in three states, the same three HQ has.
+ *
+ * Tailwind's own `dark:` follows the operating system and nothing else, which
+ * is why the app was light on a phone set to light with no way to argue. This
+ * redefines the variant to mean:
+ *
+ *   - the device asks for dark, and no choice has been made here
+ *   - or dark has been chosen here outright
+ *
+ * `[data-theme="light"]` therefore beats a dark operating system, and
+ * `[data-theme="dark"]` beats a light one. Nothing stamped means follow the
+ * device, which is the right default and the one most people never change.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+
+  &:where(:root[data-theme="dark"], :root[data-theme="dark"] *) {
+    @slot;
+  }
+}
+
 @theme {
   --font-sans: "Source Sans 3", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-display: "Young Serif", Georgia, serif;
@@ -87,11 +113,28 @@
   --color-red-400: #d4867b;
 }
 
-/* Dark is HQ's dark: not black, a green-grey that sits under warm text. */
+/*
+ * `color-scheme` is what darkens the things the page does not draw: form
+ * controls, scrollbars, the flash of background before the first paint. It has
+ * to follow the same three states as everything else, or a dark page keeps a
+ * white scrollbar down the side of it.
+ */
+:root {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -101,10 +144,20 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
-  body {
+  :root:not([data-theme="light"]) body {
     background: var(--color-stone-950);
     color: var(--color-stone-100);
   }
+}
+
+:root[data-theme="dark"] body {
+  background: var(--color-stone-950);
+  color: var(--color-stone-100);
+}
+
+:root[data-theme="light"] body {
+  background: var(--color-stone-50);
+  color: var(--color-stone-900);
 }
 
 /*

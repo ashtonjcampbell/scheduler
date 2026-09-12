@@ -5,6 +5,7 @@ import { createPost } from "./posts/actions";
 import { DryRunBanner } from "@/components/dry-run-banner";
 import { signOut } from "./actions";
 import { Strip } from "./strip";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * The signed-in shell. The proxy already redirects anonymous visitors,
@@ -57,6 +58,10 @@ export default async function AppLayout({
               </button>
             </form>
 
+            <div className="mt-3 px-3">
+              <ThemeToggle />
+            </div>
+
             <form action={signOut} className="mt-3 px-3">
               <button
                 type="submit"
@@ -77,8 +82,14 @@ export default async function AppLayout({
 
           <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
 
-          {/* The same two, for the narrow layout where the sidebar is a row. */}
+          {/* The same controls, for the narrow layout where the sidebar is a
+              row. The theme toggle matters most here: a phone is where the
+              device's own setting is most likely to disagree with you. */}
           <div className="flex items-center gap-4 px-6 pb-8 md:hidden">
+            <div className="order-last ml-auto">
+              <ThemeToggle />
+            </div>
+
             <form action={createPost}>
               <button
                 type="submit"
