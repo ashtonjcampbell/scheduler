@@ -81,7 +81,19 @@ export function useDragReorder(
       draggable: true,
       onDragStart: (event: React.DragEvent) => {
         event.dataTransfer.effectAllowed = "move";
-        // Firefox ignores a drag that carries no data at all.
+
+        /*
+         * Set the payload ourselves.
+         *
+         * A tile is a link wrapping an image, so left to itself the browser
+         * would drag the URL or the picture. Writing our own data first
+         * replaces that — which is why the link no longer has to be marked
+         * undraggable to stay out of the way.
+         *
+         * Marking it undraggable is in fact what broke this: an element with
+         * draggable="false" under the cursor stops the drag beginning at all,
+         * however willing its parent is, and the link covered the whole tile.
+         */
         event.dataTransfer.setData("text/plain", id);
         start(id);
       },

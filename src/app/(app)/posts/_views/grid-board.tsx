@@ -139,16 +139,13 @@ export function GridBoard({
                 className={
                   draggable
                     ? dragging === occupant.id
-                      ? "relative aspect-[4/5] cursor-grabbing opacity-40"
-                      : "relative aspect-[4/5] cursor-grab"
+                      ? "relative aspect-[4/5] cursor-grabbing select-none opacity-40"
+                      : "relative aspect-[4/5] cursor-grab select-none"
                     : "relative aspect-[4/5]"
                 }
               >
                 <Link
                   href={`/posts/${occupant.id}`}
-                  // A link inside a draggable element starts its own drag of the
-                  // URL, which cancels the reorder before it begins.
-                  draggable={false}
                   title={`${firstLine(occupant.caption) ?? "No caption"}${
                     tile.at ? ` — ${formatPacific(tile.at)}` : ""
                   }`}
@@ -160,7 +157,6 @@ export function GridBoard({
                       src={occupant.cover}
                       alt=""
                       loading="lazy"
-                      draggable={false}
                       // Never dimmed, published or not. The whole purpose of
                       // this page is judging how the photos sit together, and
                       // fading the unpublished ones changes the very thing
