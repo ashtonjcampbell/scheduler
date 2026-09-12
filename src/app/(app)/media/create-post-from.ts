@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
+import { newPostFields } from "@/lib/new-post";
 
 /** Instagram's Content Publishing API caps a carousel at 10 images. */
 const MAX_CAROUSEL = 10;
@@ -53,7 +54,7 @@ export async function createPostFrom(photoIds: string[]): Promise<never | { erro
 
   const { data: post, error } = await supabase
     .from("posts")
-    .insert({ title: null })
+    .insert(await newPostFields(supabase))
     .select("id")
     .single();
 

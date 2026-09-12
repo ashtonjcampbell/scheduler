@@ -20,6 +20,7 @@
     "verify:performance": "tsx scripts/verify-performance.ts",
     "verify:shape": "tsx scripts/verify-shape.ts",
     "verify:retry": "tsx scripts/verify-retry.ts",
+    "verify:new-post": "tsx scripts/verify-new-post.ts",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

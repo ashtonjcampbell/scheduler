@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { GridView } from "./_views/grid-view";
 import { ScheduleView } from "./_views/schedule-view";
-import { ListView } from "./_views/list-view";
+import { DraftsView } from "./_views/drafts-view";
 import { NewPostButton } from "./new-post-button";
 
 export const metadata = { title: "Posts" };
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  *
  *   GRID      how the profile will look, and the order, by dragging
  *   SCHEDULE  what is going out, and when
- *   LIST      everything, drafts and taken-down posts included
+ *   DRAFTS    what is still unfinished, and why
  *
  * Each view loads only its own data, so a visit costs what the old page cost
  * rather than the sum of all three.
@@ -30,13 +30,25 @@ export const dynamic = "force-dynamic";
 const VIEWS = [
   { key: "grid", label: "Grid", hint: "How the profile will look" },
   { key: "schedule", label: "Schedule", hint: "What is going out, and when" },
-  { key: "list", label: "List", hint: "Everything, drafts included" },
+  { key: "drafts", label: "Drafts", hint: "Still to finish" },
 ] as const;
 
 type View = (typeof VIEWS)[number]["key"];
 
+/** Old names, so a bookmark or a stale link still lands somewhere sensible. */
+const RENAMED: Record<string, View> = { list: "drafts" };
+
 function isView(value: string | undefined): value is View {
   return VIEWS.some((v) => v.key === value);
+}
+
+function resolve(value: string | undefined): View {
+  if (isView(value)) return value;
+  if (value && RENAMED[value]) return RENAMED[value];
+
+  // The grid is the default: it answers "what should I do next", where the
+  // others answer questions you already know you have.
+  return "grid";
 }
 
 export default async function PostsPage({
@@ -46,9 +58,7 @@ export default async function PostsPage({
 }) {
   const params = await searchParams;
 
-  // The grid is the default: it answers "what should I do next", where the
-  // others answer questions you already know you have.
-  const view: View = isView(params.view) ? params.view : "grid";
+  const view = resolve(params.view);
 
   return (
     <div className="space-y-5">
@@ -80,7 +90,7 @@ export default async function PostsPage({
 
       {view === "grid" && <GridView />}
       {view === "schedule" && <ScheduleView />}
-      {view === "list" && <ListView />}
+      {view === "drafts" && <DraftsView />}
     </div>
   );
 }

@@ -55,6 +55,7 @@ const PAGES = [
   "/media?filter=trash",
   "/posts",
   "/posts?view=schedule",
+  "/posts?view=drafts",
   "/posts?view=list",
   "/queue",
   "/grid",

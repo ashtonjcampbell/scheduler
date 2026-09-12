@@ -7,6 +7,7 @@ import { normaliseTag, validateTag } from "@/lib/hashtags";
 import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags";
 import { CAPTION_LIMIT } from "@/lib/caption";
 import { isStillOnInstagram } from "@/lib/instagram-check";
+import { newPostFields } from "@/lib/new-post";
 import type { HashtagPlacement, Post, PostStatus } from "@/lib/database.types";
 
 /** Instagram's Content Publishing API caps a carousel at 10 images. */
@@ -23,23 +24,9 @@ export async function createPost(): Promise<never> {
    * grid usable for deciding what comes next, rather than a view of only the
    * things already finished.
    */
-  const { data: last } = await supabase
-    .from("posts")
-    .select("queue_position")
-    .not("queue_position", "is", null)
-    .order("queue_position", { ascending: false })
-    .limit(1);
-
   const { data, error } = await supabase
     .from("posts")
-    .insert({
-      // A draft with a place in the order — NOT queued. Those are different
-      // things, and conflating them is what told the owner their drafts were
-      // queued when none of them were.
-      status: "preview_draft",
-      schedule_mode: "queue",
-      queue_position: (last?.[0]?.queue_position ?? -1) + 1,
-    })
+    .insert(await newPostFields(supabase))
     .select("id")
     .single();
 
@@ -345,21 +332,12 @@ export async function duplicatePost(id: string): Promise<never | { error: string
 
   if (readError || !source) return { error: readError?.message ?? "That post is gone." };
 
-  const { data: last } = await supabase
-    .from("posts")
-    .select("queue_position")
-    .not("queue_position", "is", null)
-    .order("queue_position", { ascending: false })
-    .limit(1);
-
   const { data: copy, error: createError } = await supabase
     .from("posts")
     .insert({
+      ...(await newPostFields(supabase)),
       caption: source.caption,
       hashtag_placement: source.hashtag_placement,
-      status: "preview_draft",
-      schedule_mode: "queue",
-      queue_position: (last?.[0]?.queue_position ?? -1) + 1,
     })
     .select("id")
     .single();
