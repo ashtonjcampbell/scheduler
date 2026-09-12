@@ -15,13 +15,20 @@
  *   npm run smoke                  the deployed app
  *   npm run smoke -- --local       a dev server on :3000
  *
- * CPU is the part worth watching. Cloudflare gives a free Worker TEN
- * MILLISECONDS per request, and a page that renders a long list will quietly
- * approach it as the library grows — so this reports the slowest pages rather
- * than only the broken ones, and warns before they break.
+ * IT ANSWERS ONE QUESTION: does every page load. Not how fast — this used to
+ * claim a free Worker gets ten milliseconds of CPU and to treat its own
+ * wall-clock timings as evidence about that, and both halves were wrong.
+ * Cloudflare's real figures come from `npm run cpu`, which asks Cloudflare
+ * rather than inferring from out here, and costs the app nothing.
+ *
+ * It is deliberately GENTLE. An earlier version fired three samples of every
+ * page as fast as they would go, and Cloudflare's numbers show it caused more
+ * resource failures than everything else in this app's history put together —
+ * then reported its own damage as the app's. One request per page, six hundred
+ * milliseconds apart, after a warm-up that is not measured.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const local = process.argv.includes("--local");
@@ -68,6 +75,49 @@ const PAGES = [
 
 /** Anything slower than this is close enough to the ceiling to fix now. */
 const SLOW_MS = 1500;
+
+/*
+ * Where the last run's cookies are kept.
+ *
+ * Gitignored, and it holds a real session — treat it like the .env it sits
+ * beside.
+ */
+const SESSION_FILE = ".smoke-session.json";
+
+/** Long enough to be useful, short enough that a stale one is never used. */
+const SESSION_GOOD_FOR_MS = 45 * 60 * 1000;
+
+/**
+ * The cookies from a previous run, if they are still worth having.
+ *
+ * WHY THIS EXISTS: this used to mint a fresh magic link every single run.
+ * Run it a dozen times in an evening — which is exactly what happens while
+ * working on the app — and Supabase starts refusing to issue them. It hands
+ * back a session that does not work, every page redirects to the login screen,
+ * and the smoke test reports seventeen failures that have nothing to do with
+ * the app. A test that cries wolf under repeated use is worse than no test.
+ */
+function cachedSession() {
+  try {
+    const saved = JSON.parse(readFileSync(SESSION_FILE, "utf8"));
+
+    if (saved.base !== base) return null;
+    if (Date.now() - saved.at > SESSION_GOOD_FOR_MS) return null;
+
+    return saved.cookies;
+  } catch {
+    // No file, unreadable, or not JSON. Sign in properly.
+    return null;
+  }
+}
+
+function remember(cookies) {
+  try {
+    writeFileSync(SESSION_FILE, JSON.stringify({ base, at: Date.now(), cookies }));
+  } catch {
+    // Not cached. The next run signs in again, which is only slower.
+  }
+}
 
 async function signIn() {
   const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -170,11 +220,50 @@ async function findAPost() {
   return data?.[0]?.id ?? null;
 }
 
-const cookies = await signIn();
+/*
+ * A cached session first, and a real check that it works.
+ *
+ * Trusting the cache blindly would trade one silent failure for another: an
+ * hour-old session that Supabase has since invalidated would send every page
+ * to the login screen just as convincingly. One request answers it.
+ */
+let cookies = cachedSession();
+
+if (cookies) {
+  const check = await fetch(`${base}/media`, {
+    headers: { cookie: cookies },
+    redirect: "manual",
+  });
+
+  // A redirect from a signed-in page means the session is no good.
+  if (check.status !== 200) cookies = null;
+}
+
+if (cookies) {
+  console.log("  (reusing the last session)");
+} else {
+  cookies = await signIn();
+  remember(cookies);
+}
 
 const postId = await findAPost();
 if (postId) PAGES.push(`/posts/${postId}`);
 else console.log("  (no posts yet — the composer is not covered this run)");
+
+/*
+ * WAKE IT UP FIRST, and do not measure the waking.
+ *
+ * This runs straight after a deploy, when every route is cold and Cloudflare
+ * is booting Next.js from scratch for each one. Firing fifty requests into
+ * that state produced most of the resource failures in this app's history —
+ * the test became the single biggest cause of the thing it was written to
+ * detect, and then reported its own damage as the app's.
+ *
+ * One request, a pause, and the rest of the run measures a warm worker, which
+ * is what anyone actually uses.
+ */
+await fetch(`${base}/privacy`, { signal: AbortSignal.timeout(20_000) }).catch(() => {});
+await new Promise((resolve) => setTimeout(resolve, 2_000));
 
 console.log(`\nsigned in · checking ${PAGES.length} pages on ${base}\n`);
 
@@ -191,9 +280,19 @@ async function hit(path) {
   const started = Date.now();
 
   try {
+    /*
+     * Give up after fifteen seconds.
+     *
+     * Without this a stalled connection sat for five minutes and was then
+     * reported as a five-minute COLD START, which reads as the app being
+     * catastrophically slow rather than as the network having hiccuped. No
+     * page here takes anywhere near fifteen seconds; anything that does has
+     * stopped being a timing and started being a failure.
+     */
     const response = await fetch(`${base}${path}`, {
       headers: { cookie: cookies },
       redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
     });
 
     const body = await response.text();
@@ -218,40 +317,37 @@ async function hit(path) {
 
 for (const path of PAGES) {
   /*
-   * THREE SAMPLES, and the middle one reported.
+   * ONE REQUEST PER PAGE, and a pause between them.
    *
-   * The first request to a page pays Cloudflare's cold start — four hundred
-   * milliseconds of Next.js booting that has nothing to do with the page. A
-   * single timing therefore says more about who visited last than about the
-   * work the page does, which made the numbers useless for spotting a page
-   * getting heavier. The median of three is about the warm cost.
+   * This took three samples and reported the median, to tell a cold start from
+   * a slow page. It was the wrong trade. Seventeen pages times three, fired as
+   * fast as they would go, is more than a free Worker will take — the failures
+   * moved down the list as each run went on, which is load piling up, not
+   * pages being slow. Cloudflare's own figures say this test caused more
+   * resource failures than everything else in the app's history put together,
+   * and then reported its own damage as the app's.
    *
-   * It is still wall-clock, not CPU, and Cloudflare bills CPU: most of what is
-   * measured here is waiting on Supabase, which costs nothing. Treat it as
-   * "which page does the most work", not as the bill. The real CPU figure is
-   * on the Workers dashboard.
+   * So it does the one job it is actually for: does every page load. How FAST
+   * they are is a different question with a better answer — `npm run cpu`,
+   * which asks Cloudflare instead of guessing from out here, and costs the app
+   * nothing at all.
    */
-  const runs = [];
-  for (let i = 0; i < 3; i++) runs.push(await hit(path));
+  await new Promise((resolve) => setTimeout(resolve, 600));
 
-  const worked = runs.filter((r) => (r.status === 200 || r.status === 307) && !r.note);
-  const sorted = [...runs].sort((a, b) => a.ms - b.ms);
-  const middle = sorted[1];
+  const run = await hit(path);
 
-  const status = middle.status;
-  const note = runs.find((r) => r.note)?.note ?? "";
-  const ms = middle.ms;
-  const cold = Math.max(...runs.map((r) => r.ms));
+  const status = run.status;
+  const note = run.note;
+  const ms = run.ms;
+  const cold = ms;
 
-  // One bad response out of three is still a failure worth seeing: an
-  // intermittent CPU limit is exactly the thing that is hard to catch.
-  const ok = worked.length === runs.length;
+  const ok = (status === 200 || status === 307) && !note;
 
   if (!ok) failed++;
   else if (ms > SLOW_MS) slow++;
 
   const mark = ok ? (ms > SLOW_MS ? "SLOW" : " ok ") : "FAIL";
-  const spread = cold > ms * 2 ? `  (cold ${cold}ms)` : "";
+  const spread = "";
   console.log(
     `  ${mark}  ${String(status).padEnd(3)} ${String(ms).padStart(5)}ms  ${path}${spread}${note ? `  — ${note}` : ""}`,
   );

@@ -23,7 +23,8 @@
     "verify:new-post": "tsx scripts/verify-new-post.ts",
     "smoke": "node scripts/smoke.mjs",
     "cpu": "node scripts/cpu.mjs",
-    "verify:typography": "tsx scripts/verify-typography.ts"
+    "verify:typography": "tsx scripts/verify-typography.ts",
+    "verify:refresh": "tsx scripts/verify-refresh.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

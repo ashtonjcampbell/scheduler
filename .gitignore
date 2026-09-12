@@ -52,3 +52,7 @@ cloudflare-env.d.ts
 # Worker (GitHub Actions) build output
 worker/dist/
 .dev.vars
+
+# A real session, cached by the smoke test so repeated runs stop
+# rate-limiting themselves against Supabase.
+.smoke-session.json
