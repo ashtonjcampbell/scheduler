@@ -22,12 +22,14 @@
     "verify:retry": "tsx scripts/verify-retry.ts",
     "verify:new-post": "tsx scripts/verify-new-post.ts",
     "smoke": "node scripts/smoke.mjs",
-    "cpu": "node scripts/cpu.mjs"
+    "cpu": "node scripts/cpu.mjs",
+    "verify:typography": "tsx scripts/verify-typography.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
+    "@tiptap/extension-highlight": "^3.31.3",
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",

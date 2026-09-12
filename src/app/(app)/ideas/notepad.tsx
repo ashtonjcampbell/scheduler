@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Highlight from "@tiptap/extension-highlight";
+import { TaskList, TaskItem } from "@tiptap/extension-list";
+import { Toolbar } from "./toolbar";
+import { TypingShortcuts } from "./typing-shortcuts";
 import { saveNotebook } from "./actions";
 // Aliased: the component below is also called Notebook, which is the right
 // name for both and only a problem if they collide.
@@ -58,7 +62,18 @@ export function Notebook({
   );
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    /*
+     * StarterKit already carries bold, italic, underline, strike, headings,
+     * quotes, lists, rules and links. Highlight and checkboxes are the two
+     * HQ has that it does not.
+     */
+    extensions: [
+      StarterKit,
+      Highlight,
+      TypingShortcuts,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+    ],
     content: html,
     // Rendering the editor on the server produces markup React then has to
     // reconcile against what ProseMirror builds, which warns and can drop
@@ -67,7 +82,29 @@ export function Notebook({
     editorProps: {
       attributes: {
         class:
-          "prose-sm max-w-none min-h-[18rem] p-4 text-sm leading-relaxed outline-none [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:text-sm [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:mb-2",
+          [
+            "max-w-none min-h-[18rem] p-4 text-sm leading-relaxed outline-none",
+            "[&_h1]:font-display [&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-lg first:[&_h1]:mt-0",
+            "[&_h2]:font-display [&_h2]:mb-1.5 [&_h2]:mt-4 [&_h2]:text-base first:[&_h2]:mt-0",
+            "[&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold",
+            "[&_p]:mb-2.5",
+            "[&_ul]:mb-2.5 [&_ul]:ml-5 [&_ul]:list-disc [&_ol]:mb-2.5 [&_ol]:ml-5 [&_ol]:list-decimal",
+            // Tiptap wraps each list item in its own <p>, so a bullet was
+            // paying the paragraph margin AND the list margin — a full blank
+            // line between items that no list wants.
+            "[&_li]:mb-0.5 [&_li>p]:mb-0",
+            // A nested list should not open a gap above itself either.
+            "[&_li>ul]:mt-0.5 [&_li>ul]:mb-0 [&_li>ol]:mt-0.5 [&_li>ol]:mb-0",
+            "[&_blockquote]:border-l-2 [&_blockquote]:border-stone-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-stone-500 dark:[&_blockquote]:border-stone-700 dark:[&_blockquote]:text-stone-400",
+            "[&_hr]:my-4 [&_hr]:border-stone-200 dark:[&_hr]:border-stone-800",
+            "[&_mark]:rounded-sm [&_mark]:bg-amber-300/60 [&_mark]:px-0.5 [&_mark]:text-inherit",
+            "[&_a]:text-stone-900 [&_a]:underline [&_a]:underline-offset-2 dark:[&_a]:text-stone-100",
+            "[&_code]:rounded [&_code]:bg-stone-100 [&_code]:px-1 [&_code]:text-[0.9em] dark:[&_code]:bg-stone-800",
+            // Checkboxes: the marker is the box, so the bullet has to go.
+            "[&_ul[data-type=taskList]]:ml-0 [&_ul[data-type=taskList]]:list-none",
+            "[&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:items-start [&_li[data-type=taskItem]]:gap-2",
+            "[&_li[data-type=taskItem]_input]:mt-1 [&_li[data-type=taskItem]_input]:accent-emerald-600",
+          ].join(" "),
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -124,6 +161,7 @@ export function Notebook({
       </div>
 
       <div className="mt-2 overflow-hidden rounded-lg border border-stone-300 bg-white focus-within:border-stone-500 dark:border-stone-700 dark:bg-stone-950">
+        <Toolbar editor={editor} />
         <EditorContent editor={editor} />
       </div>
     </section>

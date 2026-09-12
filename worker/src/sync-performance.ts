@@ -136,6 +136,22 @@ export async function syncPerformance(): Promise<{ seen: number; measured: numbe
       permalink: m.permalink ?? null,
       like_count: m.like_count ?? null,
       comments_count: m.comments_count ?? null,
+
+      /*
+       * ALWAYS SET, even with nothing to record.
+       *
+       * It used to be written only for rows that had insights, which broke
+       * every run with "null value in column fetched_at". A batch upsert is
+       * ONE insert statement with one column list, taken from the whole batch
+       * — so a row that simply omits a key does not fall back to the column's
+       * default, it is handed an explicit NULL. One measured row in the batch
+       * was therefore enough to fail all of them.
+       *
+       * It reads as "when this was last looked at", which is true whether or
+       * not Instagram had numbers to give.
+       */
+      fetched_at: new Date().toISOString(),
+
       ...(measured
         ? {
             reach: measured.reach ?? null,
@@ -145,7 +161,6 @@ export async function syncPerformance(): Promise<{ seen: number; measured: numbe
             total_interactions: measured.total_interactions ?? null,
             profile_visits: measured.profile_visits ?? null,
             follows: measured.follows ?? null,
-            fetched_at: new Date().toISOString(),
           }
         : {}),
     };

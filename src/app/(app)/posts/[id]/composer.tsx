@@ -21,6 +21,7 @@ import { PostActions } from "./post-actions";
 import { TagEditor } from "./tag-editor";
 import { CropEditor } from "../../media/crop-editor";
 import { carouselShape, describeShape } from "@/lib/shape";
+import { smartenAt } from "@/lib/typography";
 
 type LoadedPost = Post & {
   post_photos: Array<{ id: string; photo_id: string; position: number }>;
@@ -347,7 +348,27 @@ export function Composer({
         <textarea
           ref={captionRef}
           value={caption}
-          onChange={(event) => setCaption(event.target.value)}
+          onChange={(event) => {
+            /*
+             * "-->" becomes an arrow and "--" an em dash as you type.
+             *
+             * The cursor has to be moved with it: the replacement is shorter
+             * than what it replaces, so leaving the caret where it was would
+             * drop it back inside the text just typed. Setting it in an
+             * animation frame lets React write the new value first — doing it
+             * straight away puts the caret back and the next keystroke lands
+             * in the wrong place.
+             */
+            const raw = event.target.value;
+            const { text, caret } = smartenAt(raw, event.target.selectionStart ?? raw.length);
+
+            setCaption(text);
+
+            if (text !== raw) {
+              const field = event.target;
+              requestAnimationFrame(() => field.setSelectionRange(caret, caret));
+            }
+          }}
           rows={9}
           placeholder="Write the caption…"
           className="mt-3 w-full resize-y bg-transparent text-sm leading-relaxed outline-none placeholder:text-stone-400 dark:placeholder:text-stone-500"

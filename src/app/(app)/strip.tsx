@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { formatPacific } from "@/lib/time";
 import { NOTEBOOK_LABELS, type Notebook } from "@/lib/notebooks";
@@ -84,13 +84,33 @@ export function Strip() {
     setLoading(false);
   }, []);
 
-  const toggle = () => {
-    const next = !open;
-    setOpen(next);
+  const toggle = () => setOpen(!open);
 
-    // Fetched the first time it is opened, then kept for the visit.
-    if (next && !tiles && !loading) void load();
-  };
+  /*
+   * Fetch whenever it is open and empty — not only when it is opened.
+   *
+   * Opening it used to be the only thing that loaded it, which worked exactly
+   * once. Being open is REMEMBERED, so every later visit rendered the strip
+   * with nothing in it and no way to notice: no spinner, no empty state, just
+   * a blank column that stayed blank until you closed and reopened it.
+   *
+   * The condition is what keeps it cheap. It runs on the first render where
+   * the strip is open and there is nothing to show, and never again for the
+   * rest of the visit — the shell does not remount between pages.
+   */
+  useEffect(() => {
+    /*
+     * `set-state-in-effect` is off for this line on purpose.
+     *
+     * The rule exists to catch state set during render cascading into another
+     * render, which is a real bug and not this: this is fetching data the
+     * server deliberately did not send, on the one render where it is needed.
+     * The alternative the rule wants — deriving it — is not available, because
+     * there is nothing to derive it from until the request comes back.
+     */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !tiles && !loading && !error) void load();
+  }, [open, tiles, loading, error, load]);
 
   if (!open) {
     return (
@@ -312,7 +332,19 @@ function toBlocks(html: string): string[] {
   const root = document.createElement("div");
   root.innerHTML = html;
 
-  const blocks = root.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6, blockquote");
+  const found = [...root.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6, blockquote")];
+
+  /*
+   * ONE ENTRY PER BLOCK, not one per tag.
+   *
+   * The editor wraps each list item's text in its own paragraph, so a bullet
+   * is both an <li> and a <p> — and matching on both listed every bullet
+   * twice. Anything sitting inside another match is therefore dropped: the
+   * outer element already carries its text.
+   */
+  const blocks = found.filter(
+    (element) => !found.some((other) => other !== element && other.contains(element)),
+  );
 
   // A notebook with no block tags at all — a bare line — is still one block.
   if (blocks.length === 0) {
@@ -320,7 +352,7 @@ function toBlocks(html: string): string[] {
     return text ? [text] : [];
   }
 
-  return [...blocks]
+  return blocks
     .map((block) => block.textContent?.trim() ?? "")
     .filter((text) => text.length > 0);
 }

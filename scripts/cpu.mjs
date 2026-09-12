@@ -38,11 +38,11 @@ const env = Object.fromEntries(
     }),
 );
 
-const token = env.CLOUDFLARE_API_TOKEN;
+const token = env.CF_ANALYTICS_TOKEN;
 
 if (!token) {
   console.error(
-    "No CLOUDFLARE_API_TOKEN in .env.local.\n\n" +
+    "No CF_ANALYTICS_TOKEN in .env.local.\n\n" +
       "Make one at dash.cloudflare.com → My Profile → API Tokens → Create Token\n" +
       "→ Custom token, with Account · Account Analytics · Read.",
   );
