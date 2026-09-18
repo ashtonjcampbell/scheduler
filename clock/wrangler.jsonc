@@ -1,0 +1,17 @@
+{
+  // The scheduler's clock: every minute, "is anything due?" — and only when it
+  // is, wake the publisher. See index.ts for why GitHub's own schedule is not
+  // enough on its own.
+  //
+  // Secrets, set once with `npx wrangler secret put <NAME> -c clock/wrangler.jsonc`:
+  //   SUPABASE_SERVICE_ROLE_KEY, GITHUB_REPO, GITHUB_DISPATCH_TOKEN
+  "name": "scheduler-clock",
+  "main": "index.ts",
+  "compatibility_date": "2026-08-01",
+  "vars": {
+    "SUPABASE_URL": "https://ivkdoasyhrqrhmphwvgy.supabase.co"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  }
+}

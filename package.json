@@ -24,7 +24,8 @@
     "smoke": "node scripts/smoke.mjs",
     "cpu": "node scripts/cpu.mjs",
     "verify:typography": "tsx scripts/verify-typography.ts",
-    "verify:refresh": "tsx scripts/verify-refresh.ts"
+    "verify:refresh": "tsx scripts/verify-refresh.ts",
+    "clock:deploy": "wrangler deploy -c clock/wrangler.jsonc"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

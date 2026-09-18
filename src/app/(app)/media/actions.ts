@@ -94,6 +94,53 @@ export async function trashPhoto(photoId: string): Promise<{ error?: string }> {
   return {};
 }
 
+/**
+ * Trash several photos at once.
+ *
+ * Photos in a scheduled or published post are protected — the database
+ * refuses to trash them — and because that refusal aborts the whole statement,
+ * one protected photo in a batch used to mean none of them moved. So those
+ * are left out up front and reported, and the rest go to the trash together.
+ *
+ * Still the trash, not deletion: anything here can be put back for thirty
+ * days, which is why a batch needs no more confirmation than a single photo.
+ */
+export async function trashPhotos(
+  photoIds: string[],
+): Promise<{ error?: string; trashed?: number; kept?: number }> {
+  if (photoIds.length === 0) return { trashed: 0, kept: 0 };
+
+  const supabase = await supabaseServer();
+
+  const { data: usage, error: usageError } = await supabase
+    .from("photo_usage")
+    .select("photo_id, usage")
+    .in("photo_id", photoIds);
+
+  if (usageError) return { error: usageError.message };
+
+  const protectedIds = new Set(
+    (usage ?? [])
+      .filter((row) => row.usage === "scheduled" || row.usage === "posted")
+      .map((row) => row.photo_id),
+  );
+
+  const movable = photoIds.filter((id) => !protectedIds.has(id));
+
+  if (movable.length > 0) {
+    const { error } = await supabase
+      .from("photos")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", movable)
+      .is("deleted_at", null);
+
+    if (error) return { error: friendlyError(error.message) };
+  }
+
+  revalidatePath("/media");
+  return { trashed: movable.length, kept: protectedIds.size };
+}
+
 /** Take a photo back out of the trash. */
 export async function restorePhoto(photoId: string): Promise<{ error?: string }> {
   const supabase = await supabaseServer();
