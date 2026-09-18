@@ -1,4 +1,4 @@
-import { assignQueue, findMissed, publishOrder, reorder, type Slot } from "../src/lib/queue";
+import { assignQueue, dueQueued, findMissed, publishOrder, reorder, type Slot } from "../src/lib/queue";
 import { formatPacific, inPacific } from "../src/lib/time";
 
 /**
@@ -246,6 +246,101 @@ console.log("\nReordering");
     "posts with no readiness stated are treated as ready",
     legacy.map((a) => a.postId).join() === "a,b",
     legacy.map((a) => a.postId).join(),
+  );
+}
+
+/*
+ * The publisher's side: what is due RIGHT NOW.
+ *
+ * Every case below is the real week this broke in. One slot, Thursday 11:00
+ * Pacific; a queued post ready for it; a publish run that came along at 12:15
+ * — and published nothing, because the old logic could only ever see future
+ * slots. These dates are that Thursday: 17 September 2026, PDT (UTC-7).
+ */
+console.log("\nWhat the publisher treats as due");
+{
+  const thursday11 = [slot("thu", 4, "11:00:00")];
+  const at = (iso: string) => new Date(iso);
+  const ready = [{ id: "surprises", queue_position: 1, ready: true }];
+
+  const due = dueQueued({
+    posts: ready,
+    slots: thursday11,
+    fixed: [],
+    used: [],
+    now: at("2026-09-17T19:15:00Z"), // Thu 12:15 PM Pacific
+  });
+
+  check(
+    "a run after the slot publishes the post that was waiting for it",
+    due.length === 1 && due[0].postId === "surprises",
+    JSON.stringify(due.map((d) => d.postId)),
+  );
+
+  check(
+    "and credits it to the slot, not to when the run happened",
+    due[0]?.at.toISOString() === "2026-09-17T18:00:00.000Z",
+    due[0]?.at.toISOString() ?? "nothing due",
+  );
+
+  const early = dueQueued({
+    posts: ready,
+    slots: thursday11,
+    fixed: [],
+    used: [],
+    now: at("2026-09-17T17:45:00Z"), // Thu 10:45 AM — slot not reached yet
+  });
+
+  check("nothing goes out before its slot", early.length === 0, JSON.stringify(early));
+
+  const twoReady = [
+    { id: "first", queue_position: 1, ready: true },
+    { id: "second", queue_position: 2, ready: true },
+  ];
+
+  const afterFirst = dueQueued({
+    posts: twoReady.slice(1), // "first" has already published and left the queue
+    slots: thursday11,
+    fixed: [],
+    used: ["2026-09-17T18:00:00Z"], // the slot "first" went out in
+    now: at("2026-09-17T20:00:00Z"), // a second run, still inside the window
+  });
+
+  check(
+    "a slot already used is not handed to the next post in line",
+    afterFirst.length === 0,
+    `would have double-posted: ${JSON.stringify(afterFirst.map((d) => d.postId))}`,
+  );
+
+  const tooLate = dueQueued({
+    posts: ready,
+    slots: thursday11,
+    fixed: [],
+    used: [],
+    now: at("2026-09-18T16:00:00Z"), // Fri 9 AM — the slot was 22 hours ago
+  });
+
+  check(
+    "a slot long gone is not published into at a random hour",
+    tooLate.length === 0,
+    JSON.stringify(tooLate.map((d) => d.postId)),
+  );
+
+  const draftFirst = dueQueued({
+    posts: [
+      { id: "draft", queue_position: 0, ready: false },
+      { id: "finished", queue_position: 1, ready: true },
+    ],
+    slots: thursday11,
+    fixed: [],
+    used: [],
+    now: at("2026-09-17T18:30:00Z"),
+  });
+
+  check(
+    "a draft at the front is passed over for the next finished post",
+    draftFirst.length === 1 && draftFirst[0].postId === "finished",
+    JSON.stringify(draftFirst.map((d) => d.postId)),
   );
 }
 

@@ -142,6 +142,69 @@ export function findMissed<T extends { id: string; scheduled_for: string | null;
   });
 }
 
+/**
+ * How late a queued post may still go out for a slot that has passed.
+ *
+ * The publisher runs on a timer that is not exact, so "due" has to mean "its
+ * slot went by recently", not "its slot is this minute". Six hours covers a
+ * slow or skipped run comfortably; anything later than that is treated as a
+ * missed slot and the post waits for the next one, rather than turning up at
+ * an hour nobody chose.
+ */
+export const QUEUE_LOOKBACK_HOURS = 6;
+
+/**
+ * Which queued posts should publish right now, and for which slot.
+ *
+ * THIS IS WHERE QUEUED POSTS WERE SILENTLY NEVER PUBLISHING. The publisher
+ * used to ask `assignQueue` for slots from `now` onwards and then look for
+ * ones at or before `now` — which cannot exist, because the timetable skips
+ * every slot that has already passed. Posts pinned to an exact time went out;
+ * posts in the queue never did, and nothing failed loudly enough to notice.
+ *
+ * So the timetable is laid from a little way back, and a slot counts as due
+ * once it has passed. Two things keep that honest:
+ *
+ *   - A slot already USED is not reused. `used` carries the slot times of
+ *     queued posts that have published inside the window; any slot within the
+ *     collision window of one is taken. Without this, every run inside the
+ *     window would publish the next post in line into the same slot.
+ *   - Only READY posts take a slot. A draft at the head of the queue is passed
+ *     over, and the next finished post goes out instead.
+ */
+export function dueQueued({
+  posts,
+  slots,
+  fixed,
+  used,
+  now,
+  lookbackHours = QUEUE_LOOKBACK_HOURS,
+}: {
+  posts: readonly QueuedPost[];
+  slots: readonly Slot[];
+  fixed: readonly FixedPost[];
+  /** Slot times already filled by queued posts that have published. */
+  used: readonly string[];
+  now: Date;
+  lookbackHours?: number;
+}): Array<{ postId: string; at: Date }> {
+  const from = new Date(now.getTime() - lookbackHours * 60 * 60 * 1000);
+
+  const ready = posts.filter((p) => p.ready !== false);
+
+  const { assignments } = assignQueue({
+    posts: ready,
+    slots,
+    // A used slot is treated exactly like a pinned post sitting on it.
+    fixed: [...fixed, ...used.map((at, i) => ({ id: `used-${i}`, scheduled_for: at }))],
+    now: from,
+  });
+
+  return assignments
+    .filter((a) => a.at.getTime() <= now.getTime())
+    .map((a) => ({ postId: a.postId, at: a.at }));
+}
+
 /** Move a post within the queue, renumbering the rest to stay contiguous. */
 export function reorder(
   ids: readonly string[],

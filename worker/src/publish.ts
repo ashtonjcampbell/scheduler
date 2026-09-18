@@ -6,7 +6,7 @@ import { syncGrid } from "./sync-grid.js";
 import { syncPerformance } from "./sync-performance.js";
 import { sweepEmptyPosts } from "./sweep-empty-posts.js";
 import { reconcilePublished } from "./reconcile-published.js";
-import { assignQueue, publishOrder } from "../../src/lib/queue";
+import { dueQueued, QUEUE_LOOKBACK_HOURS } from "../../src/lib/queue";
 import { renderHashtags } from "../../src/lib/hashtags";
 
 /**
@@ -105,7 +105,7 @@ async function main() {
   let published = 0;
 
   for (const post of due.slice(0, remaining)) {
-    const ok = await publishOne(post.id, { dryRun, igUserId, accessToken });
+    const ok = await publishOne(post.id, post.at, { dryRun, igUserId, accessToken });
     if (ok) published++;
   }
 
@@ -125,12 +125,28 @@ async function findDue(): Promise<DuePost[]> {
   const supabase = serviceClient();
   const now = new Date();
 
-  const [{ data: posts }, { data: slots }] = await Promise.all([
+  // A little wider than the lookback, so a slot at the very edge of the
+  // window still sees the post that used it.
+  const usedSince = new Date(
+    now.getTime() - (QUEUE_LOOKBACK_HOURS + 2) * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [{ data: posts }, { data: slots }, { data: recent }] = await Promise.all([
     supabase
       .from("posts")
       .select("id, status, scheduled_for, queue_position, ready")
       .in("status", ["queued", "scheduled"]),
     supabase.from("schedule_slots").select("*"),
+    /*
+     * The slots already spent. A published post's `scheduled_for` is the slot
+     * it went out for — written by publishOne below — so any slot sitting on
+     * one of these is not handed to the next post in line.
+     */
+    supabase
+      .from("posts")
+      .select("scheduled_for")
+      .in("status", ["published", "publishing"])
+      .gte("scheduled_for", usedSince),
   ]);
 
   const all = posts ?? [];
@@ -139,29 +155,19 @@ async function findDue(): Promise<DuePost[]> {
     .filter((p) => p.status === "scheduled" && p.scheduled_for)
     .map((p) => ({ id: p.id, scheduled_for: p.scheduled_for!, ready: p.ready }));
 
-  // Ready first, then queue position — the same order the app shows, so the
-  // date on screen is the date the post actually goes out.
-  const queued = publishOrder(all.filter((p) => p.status === "queued"));
-
   /*
-   * Slots are laid out over the queue in order, ready or not — that ordering
-   * is the plan, and it is what the app shows.
-   *
-   * What publishes is a separate question. Count how many slots have come due,
-   * then hand them to the first posts that are actually READY, in queue order.
-   * An unfinished draft is passed over rather than blocking everything behind
-   * it, and keeps its place for the next slot.
+   * Queued posts are worked out by the same shared function the tests pin
+   * down (npm run verify:queue). It used to be written out here, asked for
+   * slots from `now` onwards and then looked for ones before `now` — which
+   * never exist — so no queued post had ever published. Only pinned times did.
    */
-  const { assignments } = assignQueue({ posts: queued, slots: slots ?? [], fixed, now });
-
-  const readyById = new Map(all.map((p) => [p.id, p.ready]));
-  const dueSlots = assignments.filter((a) => a.at <= now);
-
-  // Ready posts already sort to the front, so the due slots simply belong to
-  // the assignments at the front — as long as they are ready at all.
-  const readyInOrder = assignments
-    .slice(0, dueSlots.length)
-    .filter((a) => readyById.get(a.postId));
+  const queued = dueQueued({
+    posts: all.filter((p) => p.status === "queued"),
+    slots: slots ?? [],
+    fixed,
+    used: (recent ?? []).map((r) => r.scheduled_for!).filter(Boolean),
+    now,
+  });
 
   const due: DuePost[] = [
     // A fixed time is a promise about an instant, so it cannot be handed to a
@@ -170,21 +176,8 @@ async function findDue(): Promise<DuePost[]> {
       .filter((p) => p.ready && new Date(p.scheduled_for) <= now)
       .map((p) => ({ id: p.id, at: new Date(p.scheduled_for) })),
 
-    // Pair each due slot with the post that will actually fill it, so the log
-    // records the time the slot belonged to rather than the skipped post's.
-    ...readyInOrder.map((a, index) => ({
-      id: a.postId,
-      at: dueSlots[index]?.at ?? a.at,
-    })),
+    ...queued.map((q) => ({ id: q.postId, at: q.at })),
   ];
-
-  const skipped = dueSlots.length - readyInOrder.length;
-  if (skipped > 0) {
-    await log(
-      "info",
-      `${skipped} slot(s) had no publish-ready post waiting — the queue rolls forward`,
-    );
-  }
 
   // Oldest first, so a backlog clears in the order it was meant to go out.
   return due.sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -192,6 +185,12 @@ async function findDue(): Promise<DuePost[]> {
 
 async function publishOne(
   postId: string,
+  /**
+   * The slot this goes out for. Written to `scheduled_for` on publish, which
+   * is how the next run knows the slot is spent and does not give it to the
+   * following post as well.
+   */
+  slotAt: Date,
   options: { dryRun: boolean; igUserId: string | null; accessToken: string | null },
 ): Promise<boolean> {
   const supabase = serviceClient();
@@ -225,6 +224,7 @@ async function publishOne(
         .update({
           status: "published",
           published_at: new Date().toISOString(),
+          scheduled_for: slotAt.toISOString(),
           was_dry_run: true,
           claimed_at: null,
           last_error: null,
@@ -249,6 +249,7 @@ async function publishOne(
       .update({
         status: "published",
         published_at: new Date().toISOString(),
+        scheduled_for: slotAt.toISOString(),
         ig_media_id: result.mediaId,
         ig_permalink: result.permalink,
         was_dry_run: false,
