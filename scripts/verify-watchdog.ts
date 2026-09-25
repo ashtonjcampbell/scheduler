@@ -7,7 +7,7 @@
  */
 
 import assert from "node:assert/strict";
-import { decide, alertText, minutes, PATIENCE_MS } from "../clock/watchdog";
+import { decide, alertText, recoveryText, minutes, PATIENCE_MS } from "../clock/watchdog";
 
 let failures = 0;
 
@@ -122,6 +122,28 @@ check("a slot time in the future never makes lateness negative", () => {
   const d = decide({ wrong: true, remembered: null, now: T, kind: "overdue", startedAt: T + 10 * MINUTE });
   assert.equal(d.action, "remember");
   assert.ok(d.action === "remember" && d.incident.since <= T);
+});
+
+check("the recovery note says what recovered and for how long", () => {
+  const down = recoveryText("unreachable", 47 * MINUTE);
+  assert.match(down, /answering again/i);
+  assert.match(down, /47 minutes/);
+
+  const late = recoveryText("overdue", 90 * MINUTE);
+  assert.match(late, /published/i);
+  assert.match(late, /90 minutes/);
+});
+
+check("the issue number survives so recovery can close the right one", () => {
+  const alerted = decide({ wrong: true, remembered: { since: T }, now: T + PATIENCE_MS.unreachable, kind: "unreachable" });
+  assert.equal(alerted.action, "alert");
+
+  // The clock stores the issue number alongside; a later tick must keep it.
+  const carried = { ...(alerted.action === "alert" ? alerted.incident : {}), issue: 42 } as { since: number; alerted?: boolean; issue?: number };
+  const still = decide({ wrong: true, remembered: carried, now: T + 60 * MINUTE, kind: "unreachable" });
+
+  assert.equal(still.action, "remember");
+  assert.equal(still.action === "remember" && still.incident.issue, 42);
 });
 
 if (failures > 0) {

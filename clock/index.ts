@@ -24,7 +24,7 @@
  */
 
 import { dueQueued, QUEUE_LOOKBACK_HOURS } from "../src/lib/queue";
-import { decide, alertText, type AlertKind, type Incident } from "./watchdog";
+import { decide, alertText, recoveryText, type AlertKind, type Incident } from "./watchdog";
 
 type Env = {
   SUPABASE_URL: string;
@@ -146,17 +146,26 @@ async function watch(
 
   try {
     if (decision.action === "clear") {
-      if (remembered) await env.SCHEDULER_STATE.delete(key);
+      if (!remembered) return;
+
+      // Close the alarm we raised, so an open issue always means "wrong now".
+      if (remembered.alerted && remembered.issue) {
+        await closeIssue(env, remembered.issue, recoveryText(kind, now - remembered.since));
+      }
+
+      await env.SCHEDULER_STATE.delete(key);
       return;
     }
 
     if (decision.action === "alert") {
       const { title, body } = alertText(kind, decision.lateBy);
-      const raised = await raiseIssue(env, title, body);
+      const issue = await raiseIssue(env, title, body);
 
       // Only record "told them" if they were actually told. A refused API call
       // must not silence the next tick.
-      if (raised) await env.SCHEDULER_STATE.put(key, JSON.stringify(decision.incident));
+      if (issue) {
+        await env.SCHEDULER_STATE.put(key, JSON.stringify({ ...decision.incident, issue }));
+      }
       return;
     }
 
@@ -167,15 +176,61 @@ async function watch(
   }
 }
 
-/** Open a GitHub issue, which is what actually reaches the owner by email. */
-async function raiseIssue(env: Env, title: string, body: string): Promise<boolean> {
-  const headers = {
+/** The headers every GitHub call here needs. */
+function githubHeaders(env: Env) {
+  return {
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
     "X-GitHub-Api-Version": "2022-11-28",
     "Content-Type": "application/json",
     "User-Agent": "scheduler-clock",
   };
+}
+
+/**
+ * Close a raised alert, with a note saying it recovered.
+ *
+ * Closing needs more permission than opening does — on a public repository
+ * anyone may file an issue, while closing one is a maintainer's job. If the
+ * token has not been given it, the alert simply stays open for the owner to
+ * close by hand, which is the old behaviour and no worse.
+ */
+async function closeIssue(env: Env, issue: number, note: string): Promise<void> {
+  const base = `https://api.github.com/repos/${env.GITHUB_REPO}/issues/${issue}`;
+
+  try {
+    await fetch(`${base}/comments`, {
+      method: "POST",
+      headers: githubHeaders(env),
+      body: JSON.stringify({ body: note }),
+    });
+
+    const closed = await fetch(base, {
+      method: "PATCH",
+      headers: githubHeaders(env),
+      body: JSON.stringify({ state: "closed" }),
+    });
+
+    if (!closed.ok) {
+      console.error(
+        `could not close issue #${issue} (${closed.status}) — leaving it open`,
+      );
+      return;
+    }
+
+    console.log(`closed issue #${issue}: recovered`);
+  } catch (error) {
+    console.error("could not close the alert:", error instanceof Error ? error.message : error);
+  }
+}
+
+/**
+ * Open a GitHub issue, which is what actually reaches the owner by email.
+ *
+ * Returns the issue number, or null if nothing was raised.
+ */
+async function raiseIssue(env: Env, title: string, body: string): Promise<number | null> {
+  const headers = githubHeaders(env);
 
   try {
     /*
@@ -190,10 +245,12 @@ async function raiseIssue(env: Env, title: string, body: string): Promise<boolea
     );
 
     if (existing.ok) {
-      const open = (await existing.json()) as Array<{ title: string }>;
-      if (open.some((issue) => issue.title === title)) {
+      const open = (await existing.json()) as Array<{ title: string; number: number }>;
+      const already = open.find((issue) => issue.title === title);
+
+      if (already) {
         console.log("already reported:", title);
-        return true;
+        return already.number;
       }
     }
 
@@ -205,14 +262,15 @@ async function raiseIssue(env: Env, title: string, body: string): Promise<boolea
 
     if (!created.ok) {
       console.error(`could not raise the alert (${created.status})`, (await created.text()).slice(0, 200));
-      return false;
+      return null;
     }
 
-    console.log("alert raised:", title);
-    return true;
+    const { number } = (await created.json()) as { number: number };
+    console.log(`alert raised as #${number}:`, title);
+    return number;
   } catch (error) {
     console.error("could not raise the alert:", error instanceof Error ? error.message : error);
-    return false;
+    return null;
   }
 }
 

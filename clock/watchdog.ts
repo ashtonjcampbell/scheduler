@@ -34,6 +34,11 @@ export type Incident = {
   since: number;
   /** Whether the owner has already been told about this one. */
   alerted?: boolean;
+  /**
+   * The GitHub issue raised for it, so recovery can close the same one rather
+   * than leaving a pile of stale alarms for the owner to tidy up.
+   */
+  issue?: number;
 };
 
 /**
@@ -96,6 +101,26 @@ export function decide({
   if (lateBy < PATIENCE_MS[kind]) return { action: "remember", incident };
 
   return { action: "alert", incident: { ...incident, alerted: true }, lateBy };
+}
+
+/**
+ * What gets written on the alert when it recovers.
+ *
+ * An alarm that only ever appears is half a signal. Closing it — with how long
+ * it lasted — means an open issue always means something is wrong NOW, which
+ * is the only way a list of alerts stays worth looking at.
+ */
+export function recoveryText(kind: AlertKind, lastedMs: number): string {
+  const what =
+    kind === "unreachable"
+      ? "The database is answering again"
+      : "The overdue post has published";
+
+  return (
+    `${what}, after ${minutes(lastedMs)} minutes.\n\n` +
+    "Closed automatically by the clock. Nothing further to do — but if this " +
+    "keeps happening, the cause is worth chasing rather than the symptom."
+  );
 }
 
 /** Minutes, rounded, for a sentence a person reads. */
