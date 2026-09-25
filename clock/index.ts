@@ -24,12 +24,21 @@
  */
 
 import { dueQueued, QUEUE_LOOKBACK_HOURS } from "../src/lib/queue";
+import { decide, alertText, type AlertKind, type Incident } from "./watchdog";
 
 type Env = {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   GITHUB_REPO: string;
   GITHUB_DISPATCH_TOKEN: string;
+  /** What the clock remembers between ticks. See watchdog.ts. */
+  SCHEDULER_STATE: KVNamespace;
+};
+
+type KVNamespace = {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
 };
 
 type PostRow = {
@@ -62,8 +71,14 @@ async function rest<T>(env: Env, query: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** What should go out now — the same answer the publisher will reach. */
-async function whatIsDue(env: Env, now: Date): Promise<string[]> {
+/**
+ * What should go out now, and the slot each one was due for — the same answer
+ * the publisher will reach, because it is the same function.
+ *
+ * The times matter as much as the ids: "a post has been due for twenty
+ * minutes" is the alert worth sending, and that cannot be said without them.
+ */
+async function whatIsDue(env: Env, now: Date): Promise<Array<{ id: string; at: Date }>> {
   const usedSince = new Date(
     now.getTime() - (QUEUE_LOOKBACK_HOURS + 2) * 60 * 60 * 1000,
   ).toISOString();
@@ -86,7 +101,7 @@ async function whatIsDue(env: Env, now: Date): Promise<string[]> {
 
   const dueFixed = fixed
     .filter((p) => p.ready && new Date(p.scheduled_for).getTime() <= now.getTime())
-    .map((p) => p.id);
+    .map((p) => ({ id: p.id, at: new Date(p.scheduled_for) }));
 
   const dueQueue = dueQueued({
     posts: posts.filter((p) => p.status === "queued"),
@@ -94,52 +109,151 @@ async function whatIsDue(env: Env, now: Date): Promise<string[]> {
     fixed,
     used: recent.map((r) => r.scheduled_for).filter(Boolean),
     now,
-  }).map((d) => d.postId);
+  }).map((d) => ({ id: d.postId, at: d.at }));
 
   return [...dueFixed, ...dueQueue];
 }
 
 /**
- * Leave a note the owner can find, at most once an hour.
+ * Raise an alert, or don't, and remember which.
  *
- * A clock that fails quietly is exactly what caused this: the publisher's
- * schedule slipped for a week and nothing said so. But a note every minute
- * would bury the log, so an identical one inside the last hour is enough.
+ * The memory lives in Cloudflare rather than the database, because the whole
+ * point is to still work when the database does not.
+ *
+ * Writes are deliberately rare — once when something starts going wrong, once
+ * when the owner is told, once when it recovers — rather than once a minute.
+ * A two-day outage costs three writes.
  */
-async function warnOnce(env: Env, message: string) {
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+async function watch(
+  env: Env,
+  kind: AlertKind,
+  wrong: boolean,
+  now: number,
+  /** When it really started, if earlier than now — see decide(). */
+  startedAt?: number,
+) {
+  const key = `incident:${kind}`;
+
+  let remembered: Incident | null = null;
+  try {
+    const saved = await env.SCHEDULER_STATE.get(key);
+    if (saved) remembered = JSON.parse(saved) as Incident;
+  } catch {
+    // Unreadable memory must not stop the clock doing its actual job.
+  }
+
+  const decision = decide({ wrong, remembered, now, kind, startedAt });
 
   try {
-    const recent = await rest<unknown[]>(
-      env,
-      `publish_log?select=id&level=eq.warn&message=eq.${encodeURIComponent(message)}&at=gte.${encodeURIComponent(since)}&limit=1`,
-    );
-    if (recent.length > 0) return;
+    if (decision.action === "clear") {
+      if (remembered) await env.SCHEDULER_STATE.delete(key);
+      return;
+    }
 
-    await fetch(`${env.SUPABASE_URL}/rest/v1/publish_log`, {
+    if (decision.action === "alert") {
+      const { title, body } = alertText(kind, decision.lateBy);
+      const raised = await raiseIssue(env, title, body);
+
+      // Only record "told them" if they were actually told. A refused API call
+      // must not silence the next tick.
+      if (raised) await env.SCHEDULER_STATE.put(key, JSON.stringify(decision.incident));
+      return;
+    }
+
+    // Remembering only matters the first time; after that nothing has changed.
+    if (!remembered) await env.SCHEDULER_STATE.put(key, JSON.stringify(decision.incident));
+  } catch (error) {
+    console.error("watchdog bookkeeping failed:", error instanceof Error ? error.message : error);
+  }
+}
+
+/** Open a GitHub issue, which is what actually reaches the owner by email. */
+async function raiseIssue(env: Env, title: string, body: string): Promise<boolean> {
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+    "User-Agent": "scheduler-clock",
+  };
+
+  try {
+    /*
+     * Never two issues saying the same thing. The remembered state should
+     * prevent it, but memory can be lost — a namespace cleared, a deploy from
+     * a different machine — and waking up to forty identical issues would be
+     * its own kind of failure.
+     */
+    const existing = await fetch(
+      `https://api.github.com/repos/${env.GITHUB_REPO}/issues?state=open&per_page=30`,
+      { headers },
+    );
+
+    if (existing.ok) {
+      const open = (await existing.json()) as Array<{ title: string }>;
+      if (open.some((issue) => issue.title === title)) {
+        console.log("already reported:", title);
+        return true;
+      }
+    }
+
+    const created = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/issues`, {
       method: "POST",
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ level: "warn", message }),
+      headers,
+      body: JSON.stringify({ title, body }),
     });
-  } catch {
-    // Logging must never be the thing that breaks the clock.
+
+    if (!created.ok) {
+      console.error(`could not raise the alert (${created.status})`, (await created.text()).slice(0, 200));
+      return false;
+    }
+
+    console.log("alert raised:", title);
+    return true;
+  } catch (error) {
+    console.error("could not raise the alert:", error instanceof Error ? error.message : error);
+    return false;
   }
 }
 
 async function tick(env: Env) {
   const now = new Date();
-  const due = await whatIsDue(env, now);
 
-  if (due.length === 0) return;
+  /*
+   * THE DATABASE FIRST, because when it is unreachable nothing else is
+   * knowable — not what is due, not whether anything published, and not even
+   * a note in the app's own log, which lives inside it.
+   */
+  let due: Array<{ id: string; at: Date }>;
 
+  try {
+    due = await whatIsDue(env, now);
+  } catch (error) {
+    console.error("cannot reach the database:", error instanceof Error ? error.message : error);
+    await watch(env, "unreachable", true, now.getTime());
+    return;
+  }
+
+  await watch(env, "unreachable", false, now.getTime());
+
+  if (due.length === 0) {
+    // Nothing waiting means nothing can be late.
+    await watch(env, "overdue", false, now.getTime());
+    return;
+  }
+
+  /*
+   * Something is due, so the clock wakes the publisher — and starts counting.
+   * If the same post is still due twenty minutes from now, the wake-up is not
+   * working and the owner hears about it. This is the check that would have
+   * caught two and a half days of silence.
+   */
   console.log(`${due.length} post(s) due — waking the publisher`);
 
-  // workflow_dispatch: the publish workflow already accepts it, so this needs
-  // no change to the workflow file — only a token allowed to use it.
+  // Lateness is measured from the slot the post was due for, not from now.
+  const oldest = due.reduce((a, b) => (a.at < b.at ? a : b));
+  await watch(env, "overdue", true, now.getTime(), oldest.at.getTime());
+
   const response = await fetch(
     `https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/publish.yml/dispatches`,
     {
@@ -159,13 +273,6 @@ async function tick(env: Env) {
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 200);
     console.error(`GitHub refused to start the publisher (${response.status}): ${detail}`);
-
-    await warnOnce(
-      env,
-      response.status === 403
-        ? "The clock could not start the publisher: its GitHub token needs Actions: Read and write"
-        : `The clock could not start the publisher (GitHub ${response.status})`,
-    );
   }
 }
 

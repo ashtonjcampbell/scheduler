@@ -11,6 +11,12 @@
   "vars": {
     "SUPABASE_URL": "https://ivkdoasyhrqrhmphwvgy.supabase.co"
   },
+  // Where the clock remembers an incident between ticks — outside the
+  // database on purpose, since the database being down is the thing it has to
+  // survive to report.
+  "kv_namespaces": [
+    { "binding": "SCHEDULER_STATE", "id": "fa970163aac04f83b6d353c4bec2337b" }
+  ],
   "triggers": {
     "crons": ["* * * * *"]
   }

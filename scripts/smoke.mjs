@@ -292,7 +292,7 @@ async function hit(path) {
     const response = await fetch(`${base}${path}`, {
       headers: { cookie: cookies },
       redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(25_000),
     });
 
     const body = await response.text();
@@ -334,7 +334,23 @@ for (const path of PAGES) {
    */
   await new Promise((resolve) => setTimeout(resolve, 600));
 
-  const run = await hit(path);
+  /*
+   * ONE RETRY, because a deploy makes every page cold at once.
+   *
+   * Run straight after a deploy, the first visit to each route boots the
+   * whole framework again — around two seconds each, and once fifteen. That
+   * is a cold start, not a broken page, and failing the deploy over it teaches
+   * everyone to ignore the deploy failing.
+   *
+   * A page that is genuinely broken fails both times, so nothing real is
+   * hidden. The second attempt is the one reported.
+   */
+  let run = await hit(path);
+
+  if (!(run.status === 200 || run.status === 307) || run.note) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    run = await hit(path);
+  }
 
   const status = run.status;
   const note = run.note;
