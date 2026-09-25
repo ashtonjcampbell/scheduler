@@ -1,0 +1,81 @@
+name: Deploy
+
+# Every push to main goes live. The app's home is GitHub now: nothing about
+# putting a change in front of the owner depends on a particular laptop being
+# switched on, or on whoever made the change having Cloudflare credentials.
+on:
+  push:
+    branches: [main]
+    # Documentation and migrations change nothing about what is served.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one halfway: a cancelled deploy can
+# leave the Worker on a half-uploaded version.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Checks run here too rather than only in "Checks", so a deploy can
+      # never outrun them: this workflow and that one start at the same moment
+      # on the same push, and only this one changes what is live.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run verify:queue
+
+      - name: Build and deploy the app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Next inlines NEXT_PUBLIC_* into the browser bundle at BUILD time,
+          # so these have to be real here — Worker secrets are too late.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Read at request time from the Worker's own secrets, never baked in.
+          # Placeholders only so the build has something to validate.
+          ALLOWED_EMAIL: build@example.com
+          APP_URL: https://example.com
+        run: npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+
+      # The clock is a separate Worker on purpose, so a bad app deploy cannot
+      # stop posts going out. Its secrets live on Cloudflare and survive this.
+      - name: Deploy the clock
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy -c clock/wrangler.jsonc
+
+      # Open every page as the owner and check it actually loads. Typecheck,
+      # lint and the build all passed a broken deploy through once; this is
+      # what caught it.
+      - name: Check the live site
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OWNER_EMAIL: ${{ secrets.ALLOWED_EMAIL || 'hello@wilderpines.com' }}
+        run: |
+          # The smoke test reads .env.local, the same as it does locally.
+          # Written here, never committed, and gone when the runner is.
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY"
+            echo "ALLOWED_EMAIL=$OWNER_EMAIL"
+          } > .env.local
+          node scripts/smoke.mjs
