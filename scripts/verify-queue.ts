@@ -344,5 +344,33 @@ console.log("\nWhat the publisher treats as due");
   );
 }
 
+/*
+ * The clock's short timetable gives exactly what the full one does — and
+ * quickly. 26 September 2026: the 400-day timetable, every minute, took the
+ * clock past Cloudflare's 10 ms on every run.
+ */
+{
+  const week: Slot[] = [];
+  for (let d = 0; d < 7; d++) for (const t of ["08:00", "11:00", "14:00", "17:30"]) week.push({ id: `s${d}-${t}`, weekday: d, local_time: t, active: true });
+  const now = new Date("2026-09-26T19:05:00Z");
+  const posts = Array.from({ length: 60 }, (_, i) => ({ id: `p${i}`, queue_position: i, ready: i % 7 !== 3 }));
+  const fixed = Array.from({ length: 40 }, (_, i) => ({ id: `f${i}`, scheduled_for: new Date(now.getTime() + (i * 29 - 300) * 3600e3).toISOString() }));
+  const used = Array.from({ length: 30 }, (_, i) => new Date(now.getTime() - i * 3 * 3600e3).toISOString());
+  const short = dueQueued({ posts, slots: week, fixed, used, now });
+  const from = new Date(now.getTime() - 6 * 3600e3);
+  const long = assignQueue({
+    posts: posts.filter((p) => p.ready !== false),
+    slots: week,
+    fixed: [...fixed, ...used.map((u, i) => ({ id: `used-${i}`, scheduled_for: u }))],
+    now: from,
+  }).assignments.filter((a) => a.at.getTime() <= now.getTime()).map((a) => ({ postId: a.postId, at: a.at }));
+  check("the clock's short timetable gives what the full one gives", JSON.stringify(short) === JSON.stringify(long), JSON.stringify({ short, long }));
+
+  const started = performance.now();
+  for (let i = 0; i < 20; i++) dueQueued({ posts, slots: week, fixed, used, now });
+  const each = (performance.now() - started) / 20;
+  check(`the clock's question takes well under Cloudflare's 10 ms (${each.toFixed(2)} ms here)`, each < 3, String(each));
+}
+
 console.log(failures === 0 ? "\nAll checks passed.\n" : `\n${failures} check(s) failed.\n`);
 if (failures > 0) process.exit(1);

@@ -64,12 +64,19 @@ export function assignQueue({
   fixed,
   now,
   collisionMinutes = 60,
+  horizonDays = HORIZON_DAYS,
 }: {
   posts: readonly QueuedPost[];
   slots: readonly Slot[];
   fixed: readonly FixedPost[];
   now: Date;
   collisionMinutes?: number;
+  /**
+   * How far ahead to lay out the timetable. The queue screens want the whole
+   * of it; the clock only asks what is due by now, and a shorter timetable
+   * gives the same first slots — see `dueQueued`.
+   */
+  horizonDays?: number;
 }): { assignments: Assignment[]; unassigned: string[] } {
   const active = slots.filter((s) => s.active);
 
@@ -77,7 +84,7 @@ export function assignQueue({
     return { assignments: [], unassigned: posts.map((p) => p.id) };
   }
 
-  const timetable = upcomingSlotInstants(active, now, HORIZON_DAYS);
+  const timetable = upcomingSlotInstants(active, now, horizonDays);
 
   const blocked = fixed.map((f) => new Date(f.scheduled_for).getTime());
   const window = collisionMinutes * 60_000;
@@ -198,6 +205,15 @@ export function dueQueued({
     // A used slot is treated exactly like a pinned post sitting on it.
     fixed: [...fixed, ...used.map((at, i) => ({ id: `used-${i}`, scheduled_for: at }))],
     now: from,
+    /*
+     * Only as far as now, and a day to spare. Found 26 September 2026: laying
+     * out 400 days of slots every minute took the clock past Cloudflare's
+     * 10 ms and every run was stopped ("exceededResources") — so nothing
+     * published and the watchdog could not say so. Posts take open slots in
+     * order, so the slots up to now are the same whether the timetable runs
+     * two days or 400; the later ones only ever hold posts that are not due.
+     */
+    horizonDays: Math.ceil(lookbackHours / 24) + 1,
   });
 
   return assignments
