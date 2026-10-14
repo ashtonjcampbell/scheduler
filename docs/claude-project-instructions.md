@@ -1,10 +1,52 @@
-# Instructions for a claude.ai Project
+# Setting up the claude.ai Project
 
-Paste the block below into the Project's **custom instructions**, and upload
-`docs/how-it-works.md` and `AGENTS.md` as Project knowledge.
+Everything needed to turn a fresh Project on claude.ai into one that already
+knows this app. Kept in the repository so the two never drift: if a rule
+changes here, it changes in the Project too.
 
-Kept in the repository so the two never drift: if a rule changes here, it
-changes in the Project too.
+## Step 1 — make the Project
+
+claude.ai → **Projects** → **New project**.
+
+- **Name:** Wilderpines Scheduler
+- **Description:** My private Instagram scheduler — the app that replaced Later.
+
+## Step 2 — upload four files as Project knowledge
+
+In the Project, **Add content** → **Upload files**, and pick these four from
+`D:\Projects\scheduler`:
+
+| File | Why it's there |
+| --- | --- |
+| `docs\spec.md` | What the app is and how every screen behaves. The main one |
+| `docs\how-it-works.md` | Where each piece runs, and what to do when something breaks |
+| `AGENTS.md` | The rules that must never be broken |
+| `docs\ideas.md` | Ideas parked on purpose, with the research already done, so none of it gets re-investigated |
+
+Upload them as files rather than pasting the text: a file can be replaced in
+place when it changes, and pasted text cannot.
+
+Do **not** upload `docs\build-brief.md`. It is the original ask, kept as
+history, and it describes a version of the app that no longer exists —
+including the wrong hosting. In a Project it would read as current truth.
+
+## Step 3 — paste the custom instructions
+
+**Project settings** → **Instructions**, and paste everything below the line.
+
+## Step 4 — optional, but worth it: connect GitHub
+
+**Add content** → **GitHub**, and pick the `scheduler` repository. Then the
+Project reads the live code rather than only these four files, so it can answer
+questions the documents do not cover, and the uploads become a convenience
+rather than the only source. Since every push to `main` deploys automatically,
+a change made through the Project goes live on its own.
+
+## Keeping it current
+
+When the app changes in a way that changes how it behaves, update `docs/spec.md`
+in the repository, then replace that file in the Project. Four files, one place
+each.
 
 ---
 
@@ -16,6 +58,12 @@ out my photos.
 technical term, say what it means. Don't assume I know what a build, a branch,
 a worker or an environment variable is.
 
+**Read `spec.md` before answering anything about how the app behaves.** It is
+the current description of the app. `how-it-works.md` is for when something is
+broken. `AGENTS.md` holds the rules. `ideas.md` holds the things already
+considered and parked — check it before suggesting a feature, because the
+research may already be done and the answer may already be no.
+
 **Rules that never change:**
 
 - **No AI-generated content, ever.** Never write, suggest or improve my
@@ -25,7 +73,8 @@ a worker or an environment variable is.
 - **Colour is the whole point.** The app converts photos to sRGB in a single
   pass so they don't look washed out on Instagram. Never suggest anything that
   re-encodes a processed photo.
-- **Everything stays free.** No paid services, trials or add-ons.
+- **Everything stays free**, apart from the $5/month Cloudflare plan I'm
+  already on. No new paid services, trials or add-ons.
 
 **Things people suggest that are genuinely impossible**, so don't propose them:
 music on scheduled posts (no API can do it, on any account type), carousels

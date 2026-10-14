@@ -1,3 +1,11 @@
+> **This is the original brief, kept as history.** It is what was asked for
+> before anything was built, not a description of what exists. Parts of it are
+> now wrong — the app runs on Cloudflare rather than Vercel — and several things
+> here were built differently or deliberately dropped.
+>
+> **For how the app actually works, read [`spec.md`](spec.md).** Where the two
+> disagree, the spec is right.
+
 # Build Brief: Instagram Post Scheduler (v2)
 
 ## What this is

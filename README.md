@@ -15,6 +15,7 @@ deliberate product rule, not an omission.
 | Dashboard | Cloudflare Workers | Everything you interact with |
 | Database + photo storage | Supabase | Photos, posts, hashtags, schedule |
 | Background jobs | GitHub Actions | Photo processing and publishing |
+| The clock | Cloudflare Workers | Wakes publishing when a slot arrives, and emails you when something is wrong |
 
 Photo processing lives in GitHub Actions rather than in the dashboard because
 it needs [Sharp](https://sharp.pixelplumbing.com/), a compiled image library
@@ -87,14 +88,32 @@ not help — the dev server immediately spawns another.
 
 ## Deploying
 
-Two of the four settings are needed at **build** time, because Next.js bakes
-`NEXT_PUBLIC_*` values into the browser bundle. Set these as build environment
-variables in the Cloudflare dashboard:
+**Pushing to `main` deploys.** GitHub Actions runs the checks, builds the app
+and the clock, deploys both to Cloudflare, and then opens every page on the live
+site to confirm it actually loads. Documentation and migration changes are
+skipped, since they change nothing about what is served.
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Nothing is deployed from a laptop, and nobody needs Cloudflare credentials to
+ship a change. `npm run cf:deploy` still works for an emergency, but the push is
+the normal route.
 
-The other two are read at run time and are set as Worker secrets:
+For that to work, GitHub needs these under **Settings -> Secrets and variables
+-> Actions**:
+
+| Secret | What it is for |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Deploying both Workers. Needs *Edit Cloudflare Workers* and *Workers KV Storage: Edit* |
+| `CLOUDFLARE_ACCOUNT_ID` | Which Cloudflare account to deploy to |
+| `SUPABASE_URL` | The database, at build time and in every job |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Baked into the browser bundle at build time |
+| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses all row-level security. Treat it like a password |
+| `ALLOWED_EMAIL` | The one address allowed to sign in |
+
+Next.js inlines `NEXT_PUBLIC_*` values into the browser bundle while building,
+so those have to be real at build time — a Worker secret is set too late.
+
+Anything the running app reads at request time is a Worker secret instead, set
+once on Cloudflare and untouched by a deploy:
 
 ```bash
 npx wrangler secret put ALLOWED_EMAIL
@@ -108,17 +127,19 @@ so the OAuth routes and the settings page reach it through
 `src/lib/supabase/admin.ts`. That module imports `server-only`, so importing it
 from a client component fails the build rather than leaking at runtime.
 
-Two more are optional. They let an upload start processing immediately rather
-than waiting for the next 20-minute sweep — set `GITHUB_REPO` (as
-`owner/repo`) and `GITHUB_DISPATCH_TOKEN`, a fine-grained token needing only
-**Contents: read and write** on this one repository.
+`GITHUB_REPO` (as `owner/repo`) and `GITHUB_DISPATCH_TOKEN` are optional but
+worth having: they let an upload start processing within seconds instead of
+waiting for the next 20-minute sweep, and let the clock wake the publisher the
+minute a slot arrives. The token is fine-grained and needs **Contents: read and
+write**, **Actions: read and write**, and **Issues: read and write** on this one
+repository — Issues because that is how the clock raises and closes alerts.
 
-GitHub Actions needs its own two secrets, under Settings → Secrets and
-variables → Actions:
+The clock is a **separate** Worker (`clock/`) on purpose, so a bad app deploy
+cannot stop posts going out. Its secrets live on Cloudflare and survive every
+deploy.
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` — bypasses all row-level security. Treat it like
-  a password. It belongs here and nowhere else.
+GitHub Actions needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the
+background jobs too — the same two secrets as above, nothing extra.
 
 ## Why the repo is public
 
@@ -189,31 +210,20 @@ src/app/login/     magic-link sign-in
 src/app/privacy/   public - required by Meta for API access
 src/lib/           Supabase clients, timezone helpers, database types
 worker/            GitHub Actions jobs (Sharp lives here)
+clock/             the once-a-minute Worker and its watchdog
 supabase/          SQL migrations
+docs/              spec.md, how-it-works.md, and the original brief
 ```
 
-## Build status
+## What the app actually does
 
-- **Phase 1 — foundations: done.** Database schema, auth, app shell, Cloudflare
-  deploy path, worker scaffold, CI. Verified running on the Cloudflare runtime.
-- **Phase 2 — media bank and the photo pipeline: done.** Direct-to-storage
-  upload in overlapping batches, the colour-managed worker, filters, the
-  profile warning, and a 30-day trash.
-  `cd worker && npm run verify-pipeline` proves the colour maths.
-- **Phase 3 — composer: mostly done.** Caption with a live counter that knows
-  whether hashtags land in the caption or the first comment, photo picker with
-  the 10-image carousel cap and reordering, the hashtag library, and the
-  shuffle that replaced the spreadsheet. Still to do: tagging other accounts
-  on a photo.
-- **Phase 4 — scheduling: done.** Weekly slots, the rolling queue with times
-  worked out fresh on every read, and fixed-time posts the queue flows around.
-  `npm run verify:queue` covers both daylight-saving changes.
-- **Phase 5 — grid preview, ideas, notepad: done.**
-- **Phase 6 — publishing: done.** The publish worker (verified end to end in
-  dry run), the Instagram connection, and weekly token refresh.
+Everything in the original brief is built, and it publishes to the real
+account. For what each screen does, how scheduling behaves, and what is
+deliberately not built, read [`docs/spec.md`](docs/spec.md) — that is the
+current description of the app. For where each piece runs and what to do when
+something breaks, read [`docs/how-it-works.md`](docs/how-it-works.md).
 
-Everything in the brief is built.
-
-The app ships with **dry run on**. The whole thing — queue, worker, publishing
-— runs end to end and logs exactly what it *would* post, without contacting
-Instagram. Turn it off in Settings once the account is connected.
+There is a **dry run** switch in Settings: with it on, the whole chain — queue,
+worker, publishing — runs end to end and logs exactly what it *would* post
+without contacting Instagram. It ships on and is turned off once the account is
+connected.
