@@ -197,15 +197,44 @@ async function publishOne(
 
   // Compare-and-set: two overlapping runs cannot both claim the same post,
   // which would publish it twice.
-  const { data: claimed } = await supabase
+  const { data: claimed, error: claimError } = await supabase
     .from("posts")
-    .update({ status: "publishing", claimed_at: new Date().toISOString() })
+    .update({
+      status: "publishing",
+      claimed_at: new Date().toISOString(),
+      /*
+       * THE SLOT, WRITTEN AS PART OF CLAIMING.
+       *
+       * Not bookkeeping — the database refuses the claim without it. A check
+       * constraint from the first migration says a post that is `publishing`
+       * must know when it is going live, and a QUEUED post has no time until
+       * this moment: its date is worked out from the timetable, never stored.
+       *
+       * So every claim of a queued post failed, the error was thrown away
+       * below, and the publisher reported "already claimed elsewhere" —
+       * indistinguishable from the ordinary case where another run got there
+       * first. No queued post had ever published. Pinned posts were fine,
+       * because they already carry a time, which is exactly why this went
+       * unnoticed: the posts that did go out all had one.
+       */
+      scheduled_for: slotAt.toISOString(),
+    })
     .eq("id", postId)
     // Re-checked at the moment of claiming, not just when the list was built:
     // a post put back to a draft in the seconds since must not still go out.
     .eq("ready", true)
     .in("status", ["queued", "scheduled"])
     .select("id, caption, hashtag_placement, attempt_count");
+
+  /*
+   * A refused claim is not a quiet one. Treating every empty result as "someone
+   * else got it" is what hid the constraint for a month of Thursdays.
+   */
+  if (claimError) {
+    await log("error", `Could not claim the post: ${claimError.message}`, null, postId);
+    console.error(`  ${postId}: claim refused — ${claimError.message}`);
+    return false;
+  }
 
   const post = claimed?.[0];
   if (!post) {

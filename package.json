@@ -26,7 +26,8 @@
     "verify:typography": "tsx scripts/verify-typography.ts",
     "verify:refresh": "tsx scripts/verify-refresh.ts",
     "clock:deploy": "wrangler deploy -c clock/wrangler.jsonc",
-    "verify:watchdog": "tsx scripts/verify-watchdog.ts"
+    "verify:watchdog": "tsx scripts/verify-watchdog.ts",
+    "verify:claim": "node scripts/verify-claim.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

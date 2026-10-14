@@ -308,6 +308,31 @@ async function tick(env: Env) {
    */
   console.log(`${due.length} post(s) due — waking the publisher`);
 
+  /*
+   * At most one wake-up every few minutes.
+   *
+   * A post that stays due — because publishing is broken rather than slow —
+   * used to mean a dispatch every minute for as long as it lasted. One stuck
+   * post produced seven hundred runs in a day, none of which could have
+   * helped. The first wake-up is immediate, which is the one that matters;
+   * the rest are retries, and retries can be patient.
+   */
+  const lastKey = "dispatch:last";
+  let last = 0;
+  try {
+    last = Number((await env.SCHEDULER_STATE.get(lastKey)) ?? 0);
+  } catch {
+    // No memory, so treat it as never — worst case is one extra run.
+  }
+
+  if (now.getTime() - last < 5 * 60 * 1000) return;
+
+  try {
+    await env.SCHEDULER_STATE.put(lastKey, String(now.getTime()));
+  } catch {
+    // Unrecorded. The throttle lapses; publishing still happens.
+  }
+
   // Lateness is measured from the slot the post was due for, not from now.
   const oldest = due.reduce((a, b) => (a.at < b.at ? a : b));
   await watch(env, "overdue", true, now.getTime(), oldest.at.getTime());

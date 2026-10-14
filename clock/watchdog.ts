@@ -114,7 +114,13 @@ export function recoveryText(kind: AlertKind, lastedMs: number): string {
   const what =
     kind === "unreachable"
       ? "The database is answering again"
-      : "The overdue post has published";
+      : /*
+         * NOT "it published". The clock only knows nothing is due any more,
+         * and that is also true when a slot ages out of the six-hour window
+         * and the post quietly rolls forward to next week. Saying "published"
+         * closed two of these claiming success while the post sat untouched.
+         */
+        "Nothing is overdue any more — the post either published or its slot passed and it moved to the next one";
 
   return (
     `${what}, after ${minutes(lastedMs)} minutes.\n\n` +
