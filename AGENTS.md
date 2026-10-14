@@ -54,7 +54,9 @@ exactly the file we intend to deliver, and re-encoding would undo the work.
 
 ## Architecture constraints
 
-- Everything must stay on a permanently free tier. No trials, no paid add-ons.
+- Everything must stay on a permanently free tier, with one deliberate
+  exception: the Cloudflare Workers Paid plan, a flat $5/month. No trials, no
+  other paid add-ons.
 - Sharp cannot run on Cloudflare Workers. Image processing belongs in
   `worker/`, which runs in GitHub Actions.
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses row-level security. It belongs in

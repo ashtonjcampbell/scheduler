@@ -9,19 +9,28 @@
  *   npm run cpu             the last 24 hours
  *   npm run cpu -- --week   the last 7 days
  *
- * WHAT THE FIRST RUN FOUND, and why this does not print a limit:
+ * WHAT THE FIRST RUN FOUND, and why this does not print a per-request limit:
  *
- * The received wisdom — and what this file said in its first draft — is that a
- * free Worker gets 10ms of CPU and anything over that is Error 1102. The data
- * says otherwise. Successful requests routinely reach 500ms of CPU, while the
- * requests that DID fail were cut off around 75ms. A simple ceiling cannot
- * produce both.
+ * The received wisdom — and what this file said in its first draft — was that
+ * a Worker gets 10ms of CPU and anything over that is Error 1102. The data
+ * said otherwise even then: successful requests routinely reached 500ms of
+ * CPU, while the requests that DID fail were cut off around 75ms. A single
+ * ceiling cannot produce both. The 10ms figure is real but narrow — it is the
+ * FREE plan's allowance for a cron trigger, which is what was stopping the
+ * clock in September, not what stops a page.
  *
- * So this reports what happened rather than asserting a threshold: how many
- * requests failed, with what status, and how the CPU of the failures compares
- * to the CPU of everything that worked. `exceededResources` covers memory and
- * startup time as well as CPU, and the shape of these numbers suggests the
- * cause is not CPU alone.
+ * This account is on Workers Paid now, where a request gets 30 SECONDS of CPU
+ * by default (raisable to 5 minutes via `limits.cpu_ms`). Nothing this app
+ * does comes within three orders of magnitude of that, so CPU is no longer a
+ * plausible reason for a request to be killed — `exceededResources` also
+ * covers memory and startup time, and that is where to look instead.
+ *
+ * So the per-script tables report what happened rather than asserting a
+ * threshold: how many requests failed, with what status, and how the CPU of
+ * the failures compares to the CPU of everything that worked.
+ *
+ * What the paid plan does meter is volume, and the footer prices it: requests
+ * and CPU for the month against the allowances the $5 already covers.
  *
  * Read-only: needs Account Analytics: Read and nothing else.
  */
@@ -56,8 +65,24 @@ const window = days === 1 ? "24 hours" : "7 days";
 const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 const until = new Date().toISOString();
 
-/** The free plan's request allowance. This one is a real, published number. */
-const REQUESTS_PER_DAY = 100_000;
+/*
+ * Workers Paid, which is the plan this account is on. Published figures: the
+ * $5 covers 10 million requests and 30 million CPU-milliseconds a month, and
+ * anything beyond either allowance is charged at the rates below.
+ *
+ * Requests for static files are not billed and never appear in this dataset,
+ * so these numbers are about the app's own work and nothing else.
+ */
+const PLAN = {
+  subscription: 5.0,
+  requestsIncluded: 10_000_000,
+  perMillionRequests: 0.3,
+  cpuMsIncluded: 30_000_000,
+  perMillionCpuMs: 0.02,
+};
+
+/** A month, for projecting a one-day or one-week window forward. */
+const DAYS_PER_MONTH = 30;
 
 async function graphql(query, variables) {
   const response = await fetch("https://api.cloudflare.com/client/v4/graphql", {
@@ -137,6 +162,13 @@ console.log(`\nCloudflare · last ${window}\n`);
 
 const scripts = [...new Set(rows.map((r) => r.dimensions.scriptName))];
 
+/*
+ * Billing is per account, not per Worker, so the cost totals are taken across
+ * every script rather than reported alongside each one.
+ */
+let accountRequests = 0;
+let accountCpuMs = 0;
+
 for (const script of scripts) {
   const mine = rows.filter((r) => r.dimensions.scriptName === script);
   const total = mine.reduce((sum, r) => sum + r.sum.requests, 0);
@@ -150,6 +182,12 @@ for (const script of scripts) {
 
   for (const row of mine) {
     const q = row.quantiles ?? {};
+
+    accountRequests += row.sum.requests;
+    // The API gives quantiles, not a total, so the median request stands in
+    // for all of them. See the note on the cost block below.
+    if (q.cpuTimeP50 != null) accountCpuMs += row.sum.requests * ms(q.cpuTimeP50);
+
     console.log(
       "    " +
         (row.dimensions.status ?? "?").padEnd(22) +
@@ -166,11 +204,46 @@ for (const script of scripts) {
   const rate = ((failed / Math.max(1, total)) * 100).toFixed(2);
   const perDay = Math.round(total / days);
 
-  console.log(
-    `\n    ${failed} failed (${rate}%) · ${perDay.toLocaleString()}/day, ` +
-      `${((perDay / REQUESTS_PER_DAY) * 100).toFixed(1)}% of the ${REQUESTS_PER_DAY.toLocaleString()} allowed\n`,
-  );
+  console.log(`\n    ${failed} failed (${rate}%) · ${perDay.toLocaleString()} requests/day\n`);
 }
+
+/*
+ * What the month costs, projected from this window.
+ *
+ * Two things to hold in mind before believing a figure. A 24-hour read of a
+ * quiet day says very little — use --week. And the CPU total is estimated
+ * from the MEDIAN request, because this dataset reports quantiles rather than
+ * a sum, so a long tail of slow pages would push the real number higher; the
+ * p99 and p99.9 columns above are the warning that there is such a tail.
+ */
+const projectedRequests = Math.round((accountRequests / days) * DAYS_PER_MONTH);
+const projectedCpuMs = Math.round((accountCpuMs / days) * DAYS_PER_MONTH);
+
+const overage = (projected, included, perMillion) =>
+  (Math.max(0, projected - included) / 1_000_000) * perMillion;
+
+const requestCost = overage(projectedRequests, PLAN.requestsIncluded, PLAN.perMillionRequests);
+const cpuCost = overage(projectedCpuMs, PLAN.cpuMsIncluded, PLAN.perMillionCpuMs);
+const share = (projected, included) => `${((projected / included) * 100).toFixed(2)}%`;
+
+console.log(`  Workers Paid · projected over ${DAYS_PER_MONTH} days\n`);
+console.log(
+  `    requests  ${projectedRequests.toLocaleString().padStart(14)}    ` +
+    `of ${PLAN.requestsIncluded.toLocaleString()} included  (${share(projectedRequests, PLAN.requestsIncluded)})`,
+);
+console.log(
+  `    cpu       ${projectedCpuMs.toLocaleString().padStart(14)}ms  ` +
+    `of ${PLAN.cpuMsIncluded.toLocaleString()}ms included  (${share(projectedCpuMs, PLAN.cpuMsIncluded)})`,
+);
+
+const extra = requestCost + cpuCost;
+
+console.log(
+  extra > 0
+    ? `\n    $${PLAN.subscription.toFixed(2)} subscription + $${requestCost.toFixed(2)} requests + ` +
+        `$${cpuCost.toFixed(2)} cpu = $${(PLAN.subscription + extra).toFixed(2)}/month\n`
+    : `\n    $${PLAN.subscription.toFixed(2)}/month, with nothing over either allowance\n`,
+);
 
 /*
  * WHEN the failures happened, which is usually the answer.

@@ -2,7 +2,8 @@
 
 A private, single-user scheduling and content-organisation tool for one
 photography business's Instagram account. Replaces Buffer/Later. Every service
-it runs on is on a permanently free tier.
+it runs on is free, apart from Cloudflare's Workers Paid plan at a flat $5 a
+month.
 
 **It never generates, suggests, or autocompletes captions, hashtags, or any
 other text using AI.** It is purely an organising and scheduling tool. That is a

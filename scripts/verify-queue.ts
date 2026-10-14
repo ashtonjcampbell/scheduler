@@ -347,7 +347,12 @@ console.log("\nWhat the publisher treats as due");
 /*
  * The clock's short timetable gives exactly what the full one does — and
  * quickly. 26 September 2026: the 400-day timetable, every minute, took the
- * clock past Cloudflare's 10 ms on every run.
+ * clock past the 10 ms a free cron trigger gets, on every run.
+ *
+ * The account is on Workers Paid now, where a cron trigger gets 30 seconds,
+ * so the 3 ms bar below is no longer about surviving. It is here because the
+ * clock runs 43,200 times a month and the cheap version is also the one that
+ * cannot have the 400-day timetable creep back into it.
  */
 {
   const week: Slot[] = [];
@@ -369,7 +374,7 @@ console.log("\nWhat the publisher treats as due");
   const started = performance.now();
   for (let i = 0; i < 20; i++) dueQueued({ posts, slots: week, fixed, used, now });
   const each = (performance.now() - started) / 20;
-  check(`the clock's question takes well under Cloudflare's 10 ms (${each.toFixed(2)} ms here)`, each < 3, String(each));
+  check(`the clock's question stays under 3 ms (${each.toFixed(2)} ms here)`, each < 3, String(each));
 }
 
 console.log(failures === 0 ? "\nAll checks passed.\n" : `\n${failures} check(s) failed.\n`);

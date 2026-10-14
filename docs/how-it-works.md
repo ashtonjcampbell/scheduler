@@ -132,7 +132,8 @@ They are in `AGENTS.md` in full. The short version:
 - **Platform limits are not bugs.** Carousels cap at 10. Music cannot be
   attached by any API. Location tagging needs a deprecated endpoint.
   Collaborators are not exposed. Don't try to "fix" these.
-- **Everything stays on a free tier.**
+- **Everything stays free**, apart from Cloudflare's Workers Paid plan at a
+  flat $5/month.
 
 ---
 
