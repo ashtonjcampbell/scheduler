@@ -29,7 +29,7 @@ Nothing runs on the owner's computer. A laptop being shut is not an outage.
 | Photo processing | GitHub Actions | Resize and colour-convert uploads. Sharp cannot run on Workers |
 | Publishing | GitHub Actions | Sends due posts to Instagram |
 | Token refresh | GitHub Actions | Keeps the Instagram connection alive (~60-day token) |
-| The clock | Cloudflare Workers | Every minute: is anything due? Wakes the publisher. Raises alerts |
+| The clock | Cloudflare Workers | Every minute: is anything due? Wakes the publisher. Raises alerts. Four times a day, a one-row write so Supabase never pauses the database for inactivity |
 | Deploying | GitHub Actions | Every push to `main` builds, deploys and checks the live site |
 | Data and photos | Supabase | Postgres + Storage |
 

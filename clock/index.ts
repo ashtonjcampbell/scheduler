@@ -359,6 +359,38 @@ async function tick(env: Env) {
   }
 }
 
+/**
+ * Keep the database awake.
+ *
+ * Supabase pauses a free project after seven days without "sufficient
+ * activity", and the every-minute reads above evidently do not count: the
+ * project was flagged for pausing in October 2026 while the clock was asking
+ * every minute. A write does count, so four times a day the clock saves one
+ * row — the settings row's own `updated_at`, which the database stamps
+ * itself and nothing displays. Four rather than one so a few missed ticks can
+ * never add up to seven quiet days.
+ */
+const KEEP_AWAKE_CRON = "7 */6 * * *";
+
+async function keepAwake(env: Env) {
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/app_settings?id=eq.true`, {
+    method: "PATCH",
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ updated_at: new Date().toISOString() }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  }
+
+  console.log("database kept awake");
+}
+
 const clock = {
   async fetch(): Promise<Response> {
     return new Response("This is the scheduler's clock. It has no web interface.", {
@@ -366,7 +398,20 @@ const clock = {
     });
   },
 
-  async scheduled(_controller: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) {
+  async scheduled(
+    controller: { cron: string },
+    env: Env,
+    ctx: { waitUntil(p: Promise<unknown>): void },
+  ) {
+    if (controller.cron === KEEP_AWAKE_CRON) {
+      ctx.waitUntil(
+        keepAwake(env).catch((error) => {
+          console.error("Keep-awake failed:", error instanceof Error ? error.message : error);
+        }),
+      );
+      return;
+    }
+
     ctx.waitUntil(
       tick(env).catch((error) => {
         console.error("Clock tick failed:", error instanceof Error ? error.message : error);
