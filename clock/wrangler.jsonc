@@ -18,6 +18,9 @@
     { "binding": "SCHEDULER_STATE", "id": "fa970163aac04f83b6d353c4bec2337b" }
   ],
   "triggers": {
-    "crons": ["* * * * *"]
+    // The second keeps Supabase from pausing the database for inactivity: a
+    // small write four times a day (KEEP_AWAKE_CRON in index.ts — the two
+    // must match).
+    "crons": ["* * * * *", "7 */6 * * *"]
   }
 }
