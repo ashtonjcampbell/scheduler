@@ -1,7 +1,7 @@
 import { Extension, textInputRule } from "@tiptap/core";
 
 /**
- * The same two substitutions the caption box makes, inside the notebooks.
+ * The caption box's dash substitutions, plus "..." → "…", inside the notebooks.
  *
  * NO CAPTURE GROUPS. The first version used `find: /(\w)--(\w)$/` with
  * `replace: "$1—$2"`, which reads like `String.replace` and is not: tiptap
@@ -31,6 +31,10 @@ export const TypingShortcuts = Extension.create({
 
       // Two hyphens, the moment the second one is typed.
       textInputRule({ find: /--$/, replace: "—" }),
+
+      // Three dots, the moment the third one is typed — his ask, October 26,
+      // 2026. Backspace or Ctrl+Z straight after brings the dots back.
+      textInputRule({ find: /\.\.\.$/, replace: "…" }),
     ];
   },
 });
