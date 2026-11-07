@@ -170,7 +170,10 @@ rolls forward to the next open slot rather than sitting stale and backdated.
 
 **Scheduled workflows are disabled after 60 days of no repository activity.**
 If you stop committing for two months, GitHub will pause the cron and email
-you.
+you. The last commit before the November 2026 check-in was October 26, so the
+cron would have paused around December 25, 2026. Pushing any commit to `main`
+restarts the 60-day count; a documentation-only one is enough and does not
+trigger a deploy.
 
 ## Deleting photos
 
