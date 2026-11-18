@@ -12,7 +12,8 @@
     "verify-pipeline": "tsx src/verify-pipeline.ts",
     "sync-grid": "tsx src/sync-grid.ts",
     "sync-performance": "node scripts/link-root-modules.mjs && tsx src/sync-performance.ts",
-    "reconcile-published": "node scripts/link-root-modules.mjs && tsx src/reconcile-published.ts"
+    "reconcile-published": "node scripts/link-root-modules.mjs && tsx src/reconcile-published.ts",
+    "hq-copies": "tsx src/hq-copies.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
