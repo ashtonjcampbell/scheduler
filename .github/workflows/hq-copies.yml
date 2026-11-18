@@ -1,0 +1,40 @@
+name: Instagram copies for HQ
+
+# HQ starts this with the photos it wants (HQ's SPEC-STUDIO 45, piece 5).
+# Only on request: no schedule, so it costs nothing when nobody asks.
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: "Photo ids, comma-separated"
+        required: true
+        type: string
+
+concurrency:
+  group: hq-copies
+  cancel-in-progress: false
+
+jobs:
+  copies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Make the copies
+        working-directory: worker
+        env:
+          HQ_URL: https://hq.wilderpines.com
+          HQ_RESIZER_KEY: ${{ secrets.HQ_RESIZER_KEY }}
+          IDS: ${{ inputs.ids }}
+        run: npm run hq-copies
