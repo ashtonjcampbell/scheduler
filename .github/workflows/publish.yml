@@ -1,12 +1,9 @@
 name: Publish due posts
 
 on:
-  schedule:
-    # Every 15 minutes. GitHub runs scheduled workflows on a best-effort basis
-    # and can delay them under load, which is exactly why the rolling queue
-    # rolls a missed slot forward instead of publishing it late and backdated.
-    - cron: "*/15 * * * *"
-  # Lets you force a run from the Actions tab without waiting for the cron.
+  # The 15-minute timer is off: HQ posts to Instagram now (his yes,
+  # 18 November 2026, SPEC-STUDIO 45 piece 9), and two posters could put the
+  # same post up twice. It can still be run by hand from the Actions tab.
   workflow_dispatch:
 
 # Never let two publish runs overlap: both could claim the same post and
